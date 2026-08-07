@@ -1,6 +1,7 @@
 import Fastify from "fastify";
 import cors from "@fastify/cors";
 import { githubRoutes } from "./routes/github.js";
+import { pipelineRoutes } from "./routes/pipelines.js";
 
 const app = Fastify({
   logger: true,
@@ -18,6 +19,10 @@ app.get("/health", async () => {
 });
 
 await app.register(githubRoutes, {
+  prefix: "/api",
+});
+
+await app.register(pipelineRoutes, {
   prefix: "/api",
 });
 

@@ -57,12 +57,66 @@ export interface RepositoryInspection {
   analysis: ProjectAnalysis;
 }
 
-async function request<T>(url: string): Promise<T> {
-  const response = await fetch(url);
+export interface FlutterPipelineConfig {
+  branch: string;
+
+  trigger: {
+    push: boolean;
+    pullRequest: boolean;
+    manual: boolean;
+  };
+
+  checks: {
+    analyze: boolean;
+    test: boolean;
+  };
+
+  android: {
+    enabled: boolean;
+    apk: boolean;
+    aab: boolean;
+  };
+
+  ios: {
+    enabled: boolean;
+    unsignedBuild: boolean;
+  };
+}
+
+export interface PipelinePreview {
+  repository: {
+    owner: string;
+    repo: string;
+  };
+
+  yaml: string;
+}
+
+export interface PipelineApplyResult {
+  success: boolean;
+
+  workflow: {
+    path: string;
+    commitSha: string;
+    commitUrl: string | null;
+    created: boolean;
+  };
+}
+
+async function request<T>(
+  url: string,
+  options?: RequestInit,
+): Promise<T> {
+  const response = await fetch(url, options);
 
   if (!response.ok) {
+    const message = await response
+      .text()
+      .catch(() => "");
+
     throw new Error(
-      `Request failed: ${response.status} ${response.statusText}`,
+      message ||
+        `Request failed: ${response.status} ${response.statusText}`,
     );
   }
 
@@ -85,6 +139,38 @@ export const api = {
     ) =>
       request<RepositoryInspection>(
         `/api/github/repos/${encodeURIComponent(owner)}/${encodeURIComponent(repo)}/inspect`,
+      ),
+
+    previewFlutterPipeline: (
+      owner: string,
+      repo: string,
+      config: FlutterPipelineConfig,
+    ) =>
+      request<PipelinePreview>(
+        `/api/github/repos/${encodeURIComponent(owner)}/${encodeURIComponent(repo)}/pipeline/preview`,
+        {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify(config),
+        },
+      ),
+
+    applyFlutterPipeline: (
+      owner: string,
+      repo: string,
+      config: FlutterPipelineConfig,
+    ) =>
+      request<PipelineApplyResult>(
+        `/api/github/repos/${encodeURIComponent(owner)}/${encodeURIComponent(repo)}/pipeline`,
+        {
+          method: "PUT",
+          headers: {
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify(config),
+        },
       ),
   },
 };

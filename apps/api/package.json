@@ -12,6 +12,7 @@
     "@fastify/cors": "11.3.0",
     "fastify": "5.11.2",
     "octokit": "^5.0.5",
+    "yaml": "^2.9.0",
     "zod": "4.4.3"
   },
   "devDependencies": {

@@ -12,6 +12,7 @@ import {
   Unlock,
 } from "lucide-react";
 
+import { PipelineBuilder } from "./components/PipelineBuilder";
 import { api } from "./lib/api";
 
 function formatUpdatedAt(date: string | null) {
@@ -28,11 +29,11 @@ function formatUpdatedAt(date: string | null) {
 function App() {
   const [search, setSearch] = useState("");
 
-  const [selectedRepository, setSelectedRepository] =
-    useState<{
-      owner: string;
-      name: string;
-    } | null>(null);
+  const [selectedRepository, setSelectedRepository] = useState<{
+    owner: string;
+    name: string;
+    defaultBranch: string;
+  } | null>(null);
 
   const userQuery = useQuery({
     queryKey: ["github", "me"],
@@ -54,9 +55,7 @@ function App() {
 
     queryFn: () => {
       if (!selectedRepository) {
-        throw new Error(
-          "No repository selected.",
-        );
+        throw new Error("No repository selected.");
       }
 
       return api.github.inspectRepository(
@@ -88,6 +87,10 @@ function App() {
   const refresh = () => {
     void userQuery.refetch();
     void repositoriesQuery.refetch();
+
+    if (selectedRepository) {
+      void inspectionQuery.refetch();
+    }
   };
 
   return (
@@ -137,8 +140,7 @@ function App() {
 
               <div className="min-w-0">
                 <div className="truncate text-sm font-medium">
-                  {userQuery.data.name ??
-                    userQuery.data.login}
+                  {userQuery.data.name ?? userQuery.data.login}
                 </div>
 
                 <div className="truncate text-xs text-zinc-500">
@@ -156,11 +158,9 @@ function App() {
 
       <main className="lg:ml-64">
         <header className="flex h-16 items-center justify-between border-b border-zinc-800 px-6 lg:px-8">
-          <div>
-            <h1 className="font-semibold">
-              Projects
-            </h1>
-          </div>
+          <h1 className="font-semibold">
+            Projects
+          </h1>
 
           <div className="flex items-center gap-3">
             <div className="hidden items-center gap-2 text-sm text-zinc-500 sm:flex">
@@ -204,8 +204,8 @@ function App() {
                 </h2>
 
                 <p className="mt-2 max-w-2xl text-sm leading-6 text-zinc-400">
-                  Choose a repository to inspect its project
-                  structure and configure a CI/CD pipeline.
+                  Choose a repository to inspect its project structure
+                  and configure a CI/CD pipeline.
                 </p>
               </div>
 
@@ -253,6 +253,7 @@ function App() {
                     {repositories.length} repositories
                   </span>
                 </div>
+
                 {selectedRepository && (
                   <section className="mb-6 rounded-xl border border-zinc-800 bg-zinc-900/60 p-6">
                     <div className="mb-5 flex items-start justify-between gap-4">
@@ -285,168 +286,196 @@ function App() {
                     )}
 
                     {inspectionQuery.isError && (
-                      <div className="text-sm text-red-400">
+                      <div className="rounded-lg border border-red-900 bg-red-950/30 p-4 text-sm text-red-400">
                         {inspectionQuery.error.message}
                       </div>
                     )}
 
                     {inspectionQuery.data && (
-                      <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
-                        <div className="rounded-lg border border-zinc-800 bg-zinc-950 p-4">
-                          <p className="text-xs text-zinc-500">
-                            Framework
-                          </p>
+                      <>
+                        <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
+                          <div className="rounded-lg border border-zinc-800 bg-zinc-950 p-4">
+                            <p className="text-xs text-zinc-500">
+                              Framework
+                            </p>
 
-                          <p className="mt-2 font-medium">
-                            {inspectionQuery.data.analysis
-                              .framework ?? "Unknown"}
-                          </p>
-                        </div>
+                            <p className="mt-2 font-medium">
+                              {inspectionQuery.data.analysis.framework ??
+                                "Unknown"}
+                            </p>
+                          </div>
 
-                        <div className="rounded-lg border border-zinc-800 bg-zinc-950 p-4">
-                          <p className="text-xs text-zinc-500">
-                            Language
-                          </p>
+                          <div className="rounded-lg border border-zinc-800 bg-zinc-950 p-4">
+                            <p className="text-xs text-zinc-500">
+                              Language
+                            </p>
 
-                          <p className="mt-2 font-medium">
-                            {inspectionQuery.data.analysis
-                              .language ?? "Unknown"}
-                          </p>
-                        </div>
+                            <p className="mt-2 font-medium">
+                              {inspectionQuery.data.analysis.language ??
+                                "Unknown"}
+                            </p>
+                          </div>
 
-                        <div className="rounded-lg border border-zinc-800 bg-zinc-950 p-4">
-                          <p className="text-xs text-zinc-500">
-                            Android
-                          </p>
+                          <div className="rounded-lg border border-zinc-800 bg-zinc-950 p-4">
+                            <p className="text-xs text-zinc-500">
+                              Android
+                            </p>
 
-                          <p className="mt-2 font-medium">
-                            {inspectionQuery.data.analysis
-                              .platforms.android
-                              ? "Ready"
-                              : "Not detected"}
-                          </p>
-                        </div>
+                            <p className="mt-2 font-medium">
+                              {inspectionQuery.data.analysis.platforms
+                                .android
+                                ? "Ready"
+                                : "Not detected"}
+                            </p>
+                          </div>
 
-                        <div className="rounded-lg border border-zinc-800 bg-zinc-950 p-4">
-                          <p className="text-xs text-zinc-500">
-                            iOS
-                          </p>
+                          <div className="rounded-lg border border-zinc-800 bg-zinc-950 p-4">
+                            <p className="text-xs text-zinc-500">
+                              iOS
+                            </p>
 
-                          <p className="mt-2 font-medium">
-                            {inspectionQuery.data.analysis
-                              .platforms.ios
-                              ? "Ready"
-                              : "Not detected"}
-                          </p>
-                        </div>
+                            <p className="mt-2 font-medium">
+                              {inspectionQuery.data.analysis.platforms.ios
+                                ? "Ready"
+                                : "Not detected"}
+                            </p>
+                          </div>
 
-                        <div className="rounded-lg border border-zinc-800 bg-zinc-950 p-4">
-                          <p className="text-xs text-zinc-500">
-                            Existing CI/CD
-                          </p>
+                          <div className="rounded-lg border border-zinc-800 bg-zinc-950 p-4">
+                            <p className="text-xs text-zinc-500">
+                              Existing CI/CD
+                            </p>
 
-                          <p className="mt-2 font-medium">
-                            {inspectionQuery.data.analysis
-                              .ciConfigured
-                              ? "Detected"
-                              : "Not configured"}
-                          </p>
-                        </div>
+                            <p className="mt-2 font-medium">
+                              {inspectionQuery.data.analysis.ciConfigured
+                                ? "Detected"
+                                : "Not configured"}
+                            </p>
+                          </div>
 
-                        <div className="rounded-lg border border-zinc-800 bg-zinc-950 p-4 md:col-span-2 lg:col-span-3">
-                          <p className="text-xs text-zinc-500">
-                            Detection signals
-                          </p>
+                          <div className="rounded-lg border border-zinc-800 bg-zinc-950 p-4 md:col-span-2 lg:col-span-3">
+                            <p className="text-xs text-zinc-500">
+                              Detection signals
+                            </p>
 
-                          <div className="mt-2 flex flex-wrap gap-2">
-                            {inspectionQuery.data.analysis
-                              .signals.length > 0 ? (
-                              inspectionQuery.data.analysis.signals.map(
-                                (signal) => (
-                                  <span
-                                    key={signal}
-                                    className="rounded-md bg-zinc-800 px-2 py-1 text-xs text-zinc-300"
-                                  >
-                                    {signal}
-                                  </span>
-                                ),
-                              )
-                            ) : (
-                              <span className="text-sm text-zinc-500">
-                                No known project markers detected.
-                              </span>
-                            )}
+                            <div className="mt-2 flex flex-wrap gap-2">
+                              {inspectionQuery.data.analysis.signals
+                                .length > 0 ? (
+                                inspectionQuery.data.analysis.signals.map(
+                                  (signal) => (
+                                    <span
+                                      key={signal}
+                                      className="rounded-md bg-zinc-800 px-2 py-1 text-xs text-zinc-300"
+                                    >
+                                      {signal}
+                                    </span>
+                                  ),
+                                )
+                              ) : (
+                                <span className="text-sm text-zinc-500">
+                                  No known project markers detected.
+                                </span>
+                              )}
+                            </div>
                           </div>
                         </div>
-                      </div>
+
+                        {inspectionQuery.data.analysis.projectType ===
+                          "flutter" && (
+                          <PipelineBuilder
+                            owner={selectedRepository.owner}
+                            repo={selectedRepository.name}
+                            defaultBranch={
+                              selectedRepository.defaultBranch
+                            }
+                          />
+                        )}
+
+                        {inspectionQuery.data.analysis.projectType !==
+                          "flutter" && (
+                          <div className="mt-6 rounded-lg border border-zinc-800 bg-zinc-950 p-4">
+                            <p className="text-sm text-zinc-500">
+                              Pipeline Builder is currently available
+                              for Flutter projects. Support for this
+                              project type will be added later.
+                            </p>
+                          </div>
+                        )}
+                      </>
                     )}
                   </section>
                 )}
-                <div className="grid gap-3">
-                  {repositories.map((repo) => (
-                    <button
-                      key={repo.id}
-                      type="button"
-                      onClick={() =>
-                        setSelectedRepository({
-                          owner: repo.owner.login,
-                          name: repo.name,
-                        })
-                      }
-                      className="group flex w-full items-center justify-between rounded-xl border border-zinc-800 bg-zinc-900/40 p-5 text-left transition hover:border-zinc-700 hover:bg-zinc-900"
-                    >
-                      <div className="min-w-0">
-                        <div className="flex flex-wrap items-center gap-3">
-                          <h3 className="font-medium text-zinc-100">
-                            {repo.name}
-                          </h3>
 
-                          <span className="flex items-center gap-1 rounded-full border border-zinc-800 px-2 py-0.5 text-xs text-zinc-500">
-                            {repo.private ? (
-                              <Lock size={11} />
-                            ) : (
-                              <Unlock size={11} />
-                            )}
+                {repositories.length === 0 ? (
+                  <div className="rounded-xl border border-zinc-800 bg-zinc-900/40 p-8 text-center text-sm text-zinc-500">
+                    No repositories match your search.
+                  </div>
+                ) : (
+                  <div className="grid gap-3">
+                    {repositories.map((repo) => (
+                      <button
+                        key={repo.id}
+                        type="button"
+                        onClick={() =>
+                          setSelectedRepository({
+                            owner: repo.owner.login,
+                            name: repo.name,
+                            defaultBranch: repo.defaultBranch,
+                          })
+                        }
+                        className="group flex w-full items-center justify-between rounded-xl border border-zinc-800 bg-zinc-900/40 p-5 text-left transition hover:border-zinc-700 hover:bg-zinc-900"
+                      >
+                        <div className="min-w-0">
+                          <div className="flex flex-wrap items-center gap-3">
+                            <h3 className="font-medium text-zinc-100">
+                              {repo.name}
+                            </h3>
 
-                            {repo.private
-                              ? "Private"
-                              : "Public"}
-                          </span>
+                            <span className="flex items-center gap-1 rounded-full border border-zinc-800 px-2 py-0.5 text-xs text-zinc-500">
+                              {repo.private ? (
+                                <Lock size={11} />
+                              ) : (
+                                <Unlock size={11} />
+                              )}
 
-                          {repo.language && (
-                            <span className="rounded-full bg-zinc-800 px-2 py-0.5 text-xs text-zinc-400">
-                              {repo.language}
+                              {repo.private
+                                ? "Private"
+                                : "Public"}
                             </span>
-                          )}
-                        </div>
 
-                        <p className="mt-2 max-w-3xl truncate text-sm text-zinc-500">
-                          {repo.description ??
-                            "No repository description"}
-                        </p>
-
-                        <div className="mt-3 flex flex-wrap items-center gap-x-5 gap-y-2 text-xs text-zinc-600">
-                          <span className="flex items-center gap-1.5">
-                            <GitBranch size={13} />
-                            {repo.defaultBranch}
-                          </span>
-
-                          <span>
-                            Updated{" "}
-                            {formatUpdatedAt(
-                              repo.updatedAt,
+                            {repo.language && (
+                              <span className="rounded-full bg-zinc-800 px-2 py-0.5 text-xs text-zinc-400">
+                                {repo.language}
+                              </span>
                             )}
-                          </span>
-                        </div>
-                      </div>
+                          </div>
 
-                      <ChevronRight
-                        size={20}
-                        className="ml-5 shrink-0 text-zinc-600 transition group-hover:translate-x-1 group-hover:text-zinc-300"
-                      />
-                    </button>
-                  ))}
-                </div>
+                          <p className="mt-2 max-w-3xl truncate text-sm text-zinc-500">
+                            {repo.description ??
+                              "No repository description"}
+                          </p>
+
+                          <div className="mt-3 flex flex-wrap items-center gap-x-5 gap-y-2 text-xs text-zinc-600">
+                            <span className="flex items-center gap-1.5">
+                              <GitBranch size={13} />
+                              {repo.defaultBranch}
+                            </span>
+
+                            <span>
+                              Updated{" "}
+                              {formatUpdatedAt(repo.updatedAt)}
+                            </span>
+                          </div>
+                        </div>
+
+                        <ChevronRight
+                          size={20}
+                          className="ml-5 shrink-0 text-zinc-600 transition group-hover:translate-x-1 group-hover:text-zinc-300"
+                        />
+                      </button>
+                    ))}
+                  </div>
+                )}
               </>
             )}
         </div>
