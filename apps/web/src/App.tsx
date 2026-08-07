@@ -28,6 +28,12 @@ function formatUpdatedAt(date: string | null) {
 function App() {
   const [search, setSearch] = useState("");
 
+  const [selectedRepository, setSelectedRepository] =
+    useState<{
+      owner: string;
+      name: string;
+    } | null>(null);
+
   const userQuery = useQuery({
     queryKey: ["github", "me"],
     queryFn: api.github.me,
@@ -36,6 +42,30 @@ function App() {
   const repositoriesQuery = useQuery({
     queryKey: ["github", "repositories"],
     queryFn: api.github.repositories,
+  });
+
+  const inspectionQuery = useQuery({
+    queryKey: [
+      "github",
+      "inspection",
+      selectedRepository?.owner,
+      selectedRepository?.name,
+    ],
+
+    queryFn: () => {
+      if (!selectedRepository) {
+        throw new Error(
+          "No repository selected.",
+        );
+      }
+
+      return api.github.inspectRepository(
+        selectedRepository.owner,
+        selectedRepository.name,
+      );
+    },
+
+    enabled: selectedRepository !== null,
   });
 
   const repositories = useMemo(() => {
@@ -223,12 +253,146 @@ function App() {
                     {repositories.length} repositories
                   </span>
                 </div>
+                {selectedRepository && (
+                  <section className="mb-6 rounded-xl border border-zinc-800 bg-zinc-900/60 p-6">
+                    <div className="mb-5 flex items-start justify-between gap-4">
+                      <div>
+                        <p className="text-xs uppercase tracking-wider text-zinc-500">
+                          Project analysis
+                        </p>
 
+                        <h3 className="mt-1 text-xl font-semibold">
+                          {selectedRepository.owner}/
+                          {selectedRepository.name}
+                        </h3>
+                      </div>
+
+                      <button
+                        type="button"
+                        onClick={() =>
+                          setSelectedRepository(null)
+                        }
+                        className="text-sm text-zinc-500 hover:text-zinc-200"
+                      >
+                        Close
+                      </button>
+                    </div>
+
+                    {inspectionQuery.isLoading && (
+                      <div className="text-sm text-zinc-500">
+                        Inspecting repository structure...
+                      </div>
+                    )}
+
+                    {inspectionQuery.isError && (
+                      <div className="text-sm text-red-400">
+                        {inspectionQuery.error.message}
+                      </div>
+                    )}
+
+                    {inspectionQuery.data && (
+                      <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
+                        <div className="rounded-lg border border-zinc-800 bg-zinc-950 p-4">
+                          <p className="text-xs text-zinc-500">
+                            Framework
+                          </p>
+
+                          <p className="mt-2 font-medium">
+                            {inspectionQuery.data.analysis
+                              .framework ?? "Unknown"}
+                          </p>
+                        </div>
+
+                        <div className="rounded-lg border border-zinc-800 bg-zinc-950 p-4">
+                          <p className="text-xs text-zinc-500">
+                            Language
+                          </p>
+
+                          <p className="mt-2 font-medium">
+                            {inspectionQuery.data.analysis
+                              .language ?? "Unknown"}
+                          </p>
+                        </div>
+
+                        <div className="rounded-lg border border-zinc-800 bg-zinc-950 p-4">
+                          <p className="text-xs text-zinc-500">
+                            Android
+                          </p>
+
+                          <p className="mt-2 font-medium">
+                            {inspectionQuery.data.analysis
+                              .platforms.android
+                              ? "Ready"
+                              : "Not detected"}
+                          </p>
+                        </div>
+
+                        <div className="rounded-lg border border-zinc-800 bg-zinc-950 p-4">
+                          <p className="text-xs text-zinc-500">
+                            iOS
+                          </p>
+
+                          <p className="mt-2 font-medium">
+                            {inspectionQuery.data.analysis
+                              .platforms.ios
+                              ? "Ready"
+                              : "Not detected"}
+                          </p>
+                        </div>
+
+                        <div className="rounded-lg border border-zinc-800 bg-zinc-950 p-4">
+                          <p className="text-xs text-zinc-500">
+                            Existing CI/CD
+                          </p>
+
+                          <p className="mt-2 font-medium">
+                            {inspectionQuery.data.analysis
+                              .ciConfigured
+                              ? "Detected"
+                              : "Not configured"}
+                          </p>
+                        </div>
+
+                        <div className="rounded-lg border border-zinc-800 bg-zinc-950 p-4 md:col-span-2 lg:col-span-3">
+                          <p className="text-xs text-zinc-500">
+                            Detection signals
+                          </p>
+
+                          <div className="mt-2 flex flex-wrap gap-2">
+                            {inspectionQuery.data.analysis
+                              .signals.length > 0 ? (
+                              inspectionQuery.data.analysis.signals.map(
+                                (signal) => (
+                                  <span
+                                    key={signal}
+                                    className="rounded-md bg-zinc-800 px-2 py-1 text-xs text-zinc-300"
+                                  >
+                                    {signal}
+                                  </span>
+                                ),
+                              )
+                            ) : (
+                              <span className="text-sm text-zinc-500">
+                                No known project markers detected.
+                              </span>
+                            )}
+                          </div>
+                        </div>
+                      </div>
+                    )}
+                  </section>
+                )}
                 <div className="grid gap-3">
                   {repositories.map((repo) => (
                     <button
                       key={repo.id}
                       type="button"
+                      onClick={() =>
+                        setSelectedRepository({
+                          owner: repo.owner.login,
+                          name: repo.name,
+                        })
+                      }
                       className="group flex w-full items-center justify-between rounded-xl border border-zinc-800 bg-zinc-900/40 p-5 text-left transition hover:border-zinc-700 hover:bg-zinc-900"
                     >
                       <div className="min-w-0">
