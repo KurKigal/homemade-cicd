@@ -8,10 +8,11 @@ import {
   Smartphone,
 } from "lucide-react";
 
-import {
-  api,
-  type FlutterPipelineConfig,
-} from "../lib/api";
+import type {
+  FlutterPipelineConfig,
+} from "@homemade-cicd/core";
+
+import { api } from "../lib/api";
 
 interface PipelineBuilderProps {
   owner: string;

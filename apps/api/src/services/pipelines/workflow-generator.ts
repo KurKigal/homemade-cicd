@@ -2,7 +2,7 @@ import YAML from "yaml";
 
 import type {
   FlutterPipelineConfig,
-} from "./pipeline-schema.js";
+} from "@homemade-cicd/core";
 
 export function generateFlutterWorkflow(
   config: FlutterPipelineConfig,

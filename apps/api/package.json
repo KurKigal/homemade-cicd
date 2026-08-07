@@ -10,6 +10,7 @@
   },
   "dependencies": {
     "@fastify/cors": "11.3.0",
+    "@homemade-cicd/core": "workspace:*",
     "fastify": "5.11.2",
     "octokit": "^5.0.5",
     "yaml": "^2.9.0",

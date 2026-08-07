@@ -1,32 +1,7 @@
 import { github } from "../lib/github.js";
-
-export type ProjectType =
-  | "flutter"
-  | "node"
-  | "python"
-  | "unknown";
-
-export interface ProjectAnalysis {
-  projectType: ProjectType;
-  framework: string | null;
-  language: string | null;
-
-  packageManager:
-    | "pnpm"
-    | "npm"
-    | "yarn"
-    | "bun"
-    | null;
-
-  platforms: {
-    android: boolean;
-    ios: boolean;
-    web: boolean;
-  };
-
-  ciConfigured: boolean;
-  signals: string[];
-}
+import type {
+  ProjectAnalysis,
+} from "@homemade-cicd/core";
 
 function isNotFound(error: unknown): boolean {
   return (
