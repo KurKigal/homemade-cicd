@@ -6,7 +6,9 @@
   "scripts": {
     "dev": "node --watch --import tsx src/server.ts",
     "start": "tsx src/server.ts",
-    "typecheck": "tsc --noEmit"
+    "typecheck": "tsc --noEmit",
+    "test": "vitest run",
+    "test:watch": "vitest"
   },
   "dependencies": {
     "@fastify/cors": "11.3.0",
@@ -19,6 +21,7 @@
   "devDependencies": {
     "@types/node": "24.13.3",
     "tsx": "4.23.9",
-    "typescript": "6.0.3"
+    "typescript": "6.0.3",
+    "vitest": "4.1.10"
   }
 }
