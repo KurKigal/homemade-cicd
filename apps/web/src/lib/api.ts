@@ -1,107 +1,11 @@
-export interface GitHubUser {
-  login: string;
-  name: string | null;
-  avatarUrl: string;
-  profileUrl: string;
-}
-
-export interface Repository {
-  id: number;
-  name: string;
-  fullName: string;
-  private: boolean;
-  description: string | null;
-  language: string | null;
-  defaultBranch: string;
-  updatedAt: string | null;
-  url: string;
-  owner: {
-    login: string;
-    avatarUrl: string;
-  };
-}
-
-export interface ProjectAnalysis {
-  projectType:
-    | "flutter"
-    | "node"
-    | "python"
-    | "unknown";
-
-  framework: string | null;
-  language: string | null;
-
-  packageManager:
-    | "pnpm"
-    | "npm"
-    | "yarn"
-    | "bun"
-    | null;
-
-  platforms: {
-    android: boolean;
-    ios: boolean;
-    web: boolean;
-  };
-
-  ciConfigured: boolean;
-  signals: string[];
-}
-
-export interface RepositoryInspection {
-  repository: {
-    owner: string;
-    name: string;
-  };
-
-  analysis: ProjectAnalysis;
-}
-
-export interface FlutterPipelineConfig {
-  branch: string;
-
-  trigger: {
-    push: boolean;
-    pullRequest: boolean;
-    manual: boolean;
-  };
-
-  checks: {
-    analyze: boolean;
-    test: boolean;
-  };
-
-  android: {
-    enabled: boolean;
-    apk: boolean;
-    aab: boolean;
-  };
-
-  ios: {
-    enabled: boolean;
-    unsignedBuild: boolean;
-  };
-}
-
-export interface PipelinePreview {
-  repository: {
-    owner: string;
-    repo: string;
-  };
-
-  yaml: string;
-}
-
-export interface PipelineApplyResult {
-  success: boolean;
-
-  workflow: {
-    path: string;
-    commitSha: string;
-    commitUrl: string | null;
-    created: boolean;
-  };
-}
+import type {
+  FlutterPipelineConfig,
+  GitHubUser,
+  PipelineApplyResult,
+  PipelinePreview,
+  Repository,
+  RepositoryInspection,
+} from "@homemade-cicd/core";
 
 async function request<T>(
   url: string,

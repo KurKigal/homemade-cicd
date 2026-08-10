@@ -28,3 +28,23 @@ export const flutterPipelineSchema = z.object({
 
 export type FlutterPipelineConfig =
   z.infer<typeof flutterPipelineSchema>;
+
+export interface PipelinePreview {
+  repository: {
+    owner: string;
+    repo: string;
+  };
+
+  yaml: string;
+}
+
+export interface PipelineApplyResult {
+  success: boolean;
+
+  workflow: {
+    path: string;
+    commitSha: string;
+    commitUrl: string | null;
+    created: boolean;
+  };
+}

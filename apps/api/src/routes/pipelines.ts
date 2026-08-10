@@ -3,7 +3,7 @@ import { z } from "zod";
 
 import {
   flutterPipelineSchema,
-} from "../services/pipelines/pipeline-schema.js";
+} from "@homemade-cicd/core";
 
 import {
   generateFlutterWorkflow,
