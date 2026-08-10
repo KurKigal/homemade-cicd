@@ -1,77 +1,17 @@
-import { github } from "../lib/github.js";
 import type {
   ProjectAnalysis,
 } from "@homemade-cicd/core";
 
-function isNotFound(error: unknown): boolean {
-  return (
-    typeof error === "object" &&
-    error !== null &&
-    "status" in error &&
-    error.status === 404
-  );
-}
-
-async function getTextFile(
-  owner: string,
-  repo: string,
-  path: string,
-): Promise<string | null> {
-  try {
-    const { data } = await github.rest.repos.getContent({
-      owner,
-      repo,
-      path,
-    });
-
-    if (Array.isArray(data) || data.type !== "file") {
-      return null;
-    }
-
-    if (!("content" in data) || !data.content) {
-      return null;
-    }
-
-    return Buffer.from(
-      data.content.replace(/\n/g, ""),
-      "base64",
-    ).toString("utf8");
-  } catch (error) {
-    if (isNotFound(error)) {
-      return null;
-    }
-
-    throw error;
-  }
-}
-
-async function pathExists(
-  owner: string,
-  repo: string,
-  path: string,
-): Promise<boolean> {
-  try {
-    await github.rest.repos.getContent({
-      owner,
-      repo,
-      path,
-    });
-
-    return true;
-  } catch (error) {
-    if (isNotFound(error)) {
-      return false;
-    }
-
-    throw error;
-  }
-}
+import type {
+  RepositoryReader,
+} from "./repositories/repository-reader.js";
 
 function detectNodeFramework(
   packageJsonText: string,
 ): string {
   try {
-    const packageJson = JSON.parse(packageJsonText);
+    const packageJson =
+      JSON.parse(packageJsonText);
 
     const dependencies = {
       ...(packageJson.dependencies ?? {}),
@@ -94,7 +34,10 @@ function detectNodeFramework(
       return "Express";
     }
 
-    if ("react" in dependencies && "vite" in dependencies) {
+    if (
+      "react" in dependencies &&
+      "vite" in dependencies
+    ) {
       return "React + Vite";
     }
 
@@ -134,25 +77,21 @@ function detectPackageManager(
 }
 
 export async function detectProject(
+  reader: RepositoryReader,
   owner: string,
   repo: string,
 ): Promise<ProjectAnalysis> {
-  const { data } = await github.rest.repos.getContent({
-    owner,
-    repo,
-    path: "",
-  });
-
-  if (!Array.isArray(data)) {
-    throw new Error(
-      "Repository root could not be inspected.",
+  const names =
+    await reader.listRootEntryNames(
+      owner,
+      repo,
     );
-  }
 
-  const names = new Set(data.map((entry) => entry.name));
+  const hasPubspec =
+    names.has("pubspec.yaml");
 
-  const hasPubspec = names.has("pubspec.yaml");
-  const hasPackageJson = names.has("package.json");
+  const hasPackageJson =
+    names.has("package.json");
 
   const hasPythonProject =
     names.has("pyproject.toml") ||
@@ -164,28 +103,32 @@ export async function detectProject(
   const ios = names.has("ios");
   const web = names.has("web");
 
-  const workflowsExist = await pathExists(
-    owner,
-    repo,
-    ".github/workflows",
-  );
+  const workflowsExist =
+    await reader.pathExists(
+      owner,
+      repo,
+      ".github/workflows",
+    );
 
   /*
    * FLUTTER
    */
   if (hasPubspec) {
-    const pubspec = await getTextFile(
-      owner,
-      repo,
-      "pubspec.yaml",
-    );
+    const pubspec =
+      await reader.readTextFile(
+        owner,
+        repo,
+        "pubspec.yaml",
+      );
 
     const isFlutter =
       pubspec?.includes("sdk: flutter") ||
       pubspec?.includes("flutter:");
 
     if (isFlutter) {
-      const signals = ["pubspec.yaml"];
+      const signals = [
+        "pubspec.yaml",
+      ];
 
       if (android) {
         signals.push("android/");
@@ -221,22 +164,29 @@ export async function detectProject(
    * NODE
    */
   if (hasPackageJson) {
-    const packageJson = await getTextFile(
-      owner,
-      repo,
-      "package.json",
-    );
+    const packageJson =
+      await reader.readTextFile(
+        owner,
+        repo,
+        "package.json",
+      );
+
+    const packageManager =
+      detectPackageManager(names);
 
     return {
       projectType: "node",
 
       framework: packageJson
-        ? detectNodeFramework(packageJson)
+        ? detectNodeFramework(
+            packageJson,
+          )
         : "Node.js",
 
-      language: "TypeScript / JavaScript",
+      language:
+        "TypeScript / JavaScript",
 
-      packageManager: detectPackageManager(names),
+      packageManager,
 
       platforms: {
         android: false,
@@ -248,8 +198,11 @@ export async function detectProject(
 
       signals: [
         "package.json",
-        ...(detectPackageManager(names)
-          ? [`${detectPackageManager(names)} lockfile`]
+
+        ...(packageManager
+          ? [
+              `${packageManager} lockfile`,
+            ]
           : []),
       ],
     };

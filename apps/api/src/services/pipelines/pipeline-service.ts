@@ -1,45 +1,9 @@
-import { github } from "../../lib/github.js";
+import {
+  githubAdapter,
+} from "../../adapters/github/github-adapter.js";
 
 const WORKFLOW_PATH =
   ".github/workflows/homemade-ci.yml";
-
-function isNotFound(error: unknown): boolean {
-  return (
-    typeof error === "object" &&
-    error !== null &&
-    "status" in error &&
-    error.status === 404
-  );
-}
-
-async function getExistingWorkflowSha(
-  owner: string,
-  repo: string,
-): Promise<string | undefined> {
-  try {
-    const { data } =
-      await github.rest.repos.getContent({
-        owner,
-        repo,
-        path: WORKFLOW_PATH,
-      });
-
-    if (
-      Array.isArray(data) ||
-      data.type !== "file"
-    ) {
-      return undefined;
-    }
-
-    return data.sha;
-  } catch (error) {
-    if (isNotFound(error)) {
-      return undefined;
-    }
-
-    throw error;
-  }
-}
 
 export async function saveWorkflow({
   owner,
@@ -53,23 +17,24 @@ export async function saveWorkflow({
   yaml: string;
 }) {
   const existingSha =
-    await getExistingWorkflowSha(owner, repo);
+    await githubAdapter.getFileSha(
+      owner,
+      repo,
+      WORKFLOW_PATH,
+    );
 
-  const response =
-    await github.rest.repos.createOrUpdateFileContents({
+  const result =
+    await githubAdapter.writeTextFile({
       owner,
       repo,
       path: WORKFLOW_PATH,
+      branch,
 
       message: existingSha
         ? "ci: update Homemade CI/CD pipeline"
         : "ci: add Homemade CI/CD pipeline",
 
-      content: Buffer.from(yaml, "utf8").toString(
-        "base64",
-      ),
-
-      branch,
+      content: yaml,
 
       ...(existingSha
         ? {
@@ -80,8 +45,8 @@ export async function saveWorkflow({
 
   return {
     path: WORKFLOW_PATH,
-    commitSha: response.data.commit.sha,
-    commitUrl: response.data.commit.html_url,
+    commitSha: result.commitSha,
+    commitUrl: result.commitUrl,
     created: !existingSha,
   };
 }
