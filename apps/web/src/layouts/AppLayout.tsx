@@ -14,8 +14,11 @@ import {
   Server,
 } from "lucide-react";
 
+import { NavLink } from "react-router";
+
 interface AppLayoutProps {
   children: ReactNode;
+  title: string;
 
   user:
     | GitHubUser
@@ -30,6 +33,7 @@ export function AppLayout({
   children,
   user,
   isRefreshing,
+  title,
   onRefresh,
 }: AppLayoutProps) {
   return (
@@ -52,17 +56,24 @@ export function AppLayout({
         </div>
 
         <nav className="space-y-1 p-4">
-          <button className="flex w-full items-center gap-3 rounded-lg bg-zinc-900 px-3 py-2.5 text-sm font-medium">
-            <Server size={18} />
+          <SidebarLink
+            to="/projects"
+            icon={<Server size={18} />}
+          >
             Projects
-          </button>
+          </SidebarLink>
 
-          <button className="flex w-full items-center gap-3 rounded-lg px-3 py-2.5 text-sm text-zinc-400 hover:bg-zinc-900 hover:text-zinc-100">
-            <Activity size={18} />
+          <SidebarLink
+            to="/runs"
+            icon={<Activity size={18} />}
+          >
             Runs
-          </button>
+          </SidebarLink>
 
-          <button className="flex w-full items-center gap-3 rounded-lg px-3 py-2.5 text-sm text-zinc-400 hover:bg-zinc-900 hover:text-zinc-100">
+          <button
+            disabled
+            className="flex w-full cursor-not-allowed items-center gap-3 rounded-lg px-3 py-2.5 text-sm text-zinc-700"
+          >
             <GitBranch size={18} />
             Pipelines
           </button>
@@ -98,7 +109,7 @@ export function AppLayout({
       <main className="lg:ml-64">
         <header className="flex h-16 items-center justify-between border-b border-zinc-800 px-6 lg:px-8">
           <h1 className="font-semibold">
-            Projects
+            {title}
           </h1>
 
           <div className="flex items-center gap-3">
@@ -133,5 +144,32 @@ export function AppLayout({
         {children}
       </main>
     </div>
+  );
+}
+
+function SidebarLink({
+  to,
+  icon,
+  children,
+}: {
+  to: string;
+  icon: ReactNode;
+  children: ReactNode;
+}) {
+  return (
+    <NavLink
+      to={to}
+      className={({ isActive }) =>
+        [
+          "flex w-full items-center gap-3 rounded-lg px-3 py-2.5 text-sm transition",
+          isActive
+            ? "bg-zinc-900 font-medium text-zinc-100"
+            : "text-zinc-400 hover:bg-zinc-900 hover:text-zinc-100",
+        ].join(" ")
+      }
+    >
+      {icon}
+      {children}
+    </NavLink>
   );
 }

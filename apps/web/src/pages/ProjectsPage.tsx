@@ -117,6 +117,7 @@ export function ProjectsPage() {
 
   return (
     <AppLayout
+      title="Projects"
       user={userQuery.data}
       isRefreshing={
         repositoriesQuery.isFetching

@@ -1,6 +1,8 @@
 import type {
   GitHubUser,
   Repository,
+  WorkflowJob,
+  WorkflowRun,
 } from "@homemade-cicd/core";
 
 import { github } from "../../lib/github.js";
@@ -31,6 +33,148 @@ interface WriteTextFileInput {
 export class GitHubAdapter
   implements RepositoryReader
 {
+  async listWorkflowRuns(
+    owner: string,
+    repo: string,
+    perPage = 30,
+  ): Promise<{
+    totalCount: number;
+    runs: WorkflowRun[];
+  }> {
+    const { data } =
+      await github.rest.actions.listWorkflowRunsForRepo({
+        owner,
+        repo,
+        per_page: perPage,
+      });
+
+    return {
+      totalCount: data.total_count,
+
+      runs: data.workflow_runs.map((run) =>
+        this.mapWorkflowRun(run),
+      ),
+    };
+  }
+
+  async getWorkflowRun(
+    owner: string,
+    repo: string,
+    runId: number,
+  ): Promise<WorkflowRun> {
+    const { data } =
+      await github.rest.actions.getWorkflowRun({
+        owner,
+        repo,
+        run_id: runId,
+      });
+
+    return this.mapWorkflowRun(data);
+  }
+
+  async listWorkflowRunJobs(
+    owner: string,
+    repo: string,
+    runId: number,
+  ): Promise<{
+    totalCount: number;
+    jobs: WorkflowJob[];
+  }> {
+    const { data } =
+      await github.rest.actions.listJobsForWorkflowRun({
+        owner,
+        repo,
+        run_id: runId,
+        filter: "latest",
+        per_page: 100,
+      });
+
+    return {
+      totalCount: data.total_count,
+
+      jobs: data.jobs.map((job) => ({
+        id: job.id,
+        name: job.name,
+
+        status: job.status,
+        conclusion: job.conclusion,
+
+        startedAt: job.started_at ?? null,
+        completedAt: job.completed_at ?? null,
+
+        htmlUrl: job.html_url ?? null,
+
+        runnerName: job.runner_name ?? null,
+
+        labels: job.labels,
+
+        steps: (job.steps ?? []).map((step) => ({
+          number: step.number,
+          name: step.name,
+
+          status: step.status,
+          conclusion: step.conclusion,
+
+          startedAt: step.started_at ?? null,
+          completedAt: step.completed_at ?? null,
+        })),
+      })),
+    };
+  }
+
+  private mapWorkflowRun(
+    run: Awaited<
+      ReturnType<
+        typeof github.rest.actions.getWorkflowRun
+      >
+    >["data"],
+  ): WorkflowRun {
+    return {
+      id: run.id,
+
+      workflowName:
+        run.name ?? "GitHub Actions",
+
+      displayTitle:
+        run.display_title ??
+        run.name ??
+        "Workflow run",
+
+      runNumber: run.run_number,
+
+      attempt:
+        run.run_attempt ?? 1,
+
+      event: run.event,
+
+      status: run.status ?? "unknown",
+
+      conclusion:
+        run.conclusion ?? null,
+
+      headBranch:
+        run.head_branch ?? null,
+
+      headSha: run.head_sha,
+
+      htmlUrl: run.html_url,
+
+      createdAt: run.created_at,
+      updatedAt: run.updated_at,
+
+      startedAt:
+        run.run_started_at ?? null,
+
+      actor: run.actor
+        ? {
+            login: run.actor.login,
+            avatarUrl:
+              run.actor.avatar_url,
+          }
+        : null,
+    };
+  }
+
   async getAuthenticatedUser(): Promise<GitHubUser> {
     const { data } =
       await github.rest.users.getAuthenticated();

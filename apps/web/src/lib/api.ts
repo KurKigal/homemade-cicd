@@ -7,6 +7,12 @@ import type {
   RepositoryInspection,
 } from "@homemade-cicd/core";
 
+import type {
+  WorkflowJobsResponse,
+  WorkflowRunResponse,
+  WorkflowRunsResponse,
+} from "@homemade-cicd/core";
+
 async function request<T>(
   url: string,
   options?: RequestInit,
@@ -75,6 +81,32 @@ export const api = {
           },
           body: JSON.stringify(config),
         },
+      ),
+
+        workflowRuns: (
+      owner: string,
+      repo: string,
+    ) =>
+      request<WorkflowRunsResponse>(
+        `/api/github/repos/${encodeURIComponent(owner)}/${encodeURIComponent(repo)}/runs`,
+      ),
+
+    workflowRun: (
+      owner: string,
+      repo: string,
+      runId: number,
+    ) =>
+      request<WorkflowRunResponse>(
+        `/api/github/repos/${encodeURIComponent(owner)}/${encodeURIComponent(repo)}/runs/${runId}`,
+      ),
+
+    workflowRunJobs: (
+      owner: string,
+      repo: string,
+      runId: number,
+    ) =>
+      request<WorkflowJobsResponse>(
+        `/api/github/repos/${encodeURIComponent(owner)}/${encodeURIComponent(repo)}/runs/${runId}/jobs`,
       ),
   },
 };
