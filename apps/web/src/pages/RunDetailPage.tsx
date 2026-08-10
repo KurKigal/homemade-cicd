@@ -13,12 +13,16 @@ import {
 } from "react-router";
 
 import {
-  AppLayout,
-} from "../layouts/AppLayout";
+  RunActions,
+} from "../features/runs/RunActions";
 
 import {
   RunStatusBadge,
 } from "../features/runs/RunStatusBadge";
+
+import {
+  AppLayout,
+} from "../layouts/AppLayout";
 
 import {
   api,
@@ -46,7 +50,10 @@ export function RunDetailPage() {
     parsedRunId > 0;
 
   const userQuery = useQuery({
-    queryKey: ["github", "me"],
+    queryKey: [
+      "github",
+      "me",
+    ],
     queryFn: api.github.me,
   });
 
@@ -59,12 +66,19 @@ export function RunDetailPage() {
       parsedRunId,
     ],
 
-    queryFn: () =>
-      api.github.workflowRun(
-        owner!,
-        repo!,
+    queryFn: () => {
+      if (!owner || !repo) {
+        throw new Error(
+          "Invalid repository.",
+        );
+      }
+
+      return api.github.workflowRun(
+        owner,
+        repo,
         parsedRunId,
-      ),
+      );
+    },
 
     enabled: valid,
 
@@ -80,12 +94,19 @@ export function RunDetailPage() {
       parsedRunId,
     ],
 
-    queryFn: () =>
-      api.github.workflowRunJobs(
-        owner!,
-        repo!,
+    queryFn: () => {
+      if (!owner || !repo) {
+        throw new Error(
+          "Invalid repository.",
+        );
+      }
+
+      return api.github.workflowRunJobs(
+        owner,
+        repo,
         parsedRunId,
-      ),
+      );
+    },
 
     enabled: valid,
 
@@ -94,8 +115,11 @@ export function RunDetailPage() {
 
   function refresh() {
     void userQuery.refetch();
-    void runQuery.refetch();
-    void jobsQuery.refetch();
+
+    if (valid) {
+      void runQuery.refetch();
+      void jobsQuery.refetch();
+    }
   }
 
   return (
@@ -112,7 +136,7 @@ export function RunDetailPage() {
         {owner && repo && (
           <Link
             to={`/runs/${encodeURIComponent(owner)}/${encodeURIComponent(repo)}`}
-            className="mb-6 inline-flex items-center gap-2 text-sm text-zinc-500 hover:text-zinc-200"
+            className="mb-6 inline-flex items-center gap-2 text-sm text-zinc-500 transition hover:text-zinc-200"
           >
             <ArrowLeft size={16} />
             Back to runs
@@ -120,25 +144,24 @@ export function RunDetailPage() {
         )}
 
         {!valid ? (
-          <div className="text-red-400">
+          <div className="rounded-xl border border-red-900/60 bg-red-950/20 p-5 text-sm text-red-400">
             Invalid workflow run.
           </div>
         ) : runQuery.isLoading ? (
-          <div className="text-zinc-500">
+          <div className="rounded-xl border border-zinc-800 bg-zinc-900/40 p-8 text-sm text-zinc-500">
             Loading run...
           </div>
         ) : runQuery.isError ? (
-          <div className="text-red-400">
-            {
-              runQuery.error
-                .message
-            }
+          <div className="rounded-xl border border-red-900/60 bg-red-950/20 p-5 text-sm text-red-400">
+            {runQuery.error.message}
           </div>
-        ) : runQuery.data ? (
+        ) : runQuery.data &&
+          owner &&
+          repo ? (
           <>
             <section className="mb-6 rounded-xl border border-zinc-800 bg-zinc-900/40 p-6">
               <div className="flex flex-col justify-between gap-5 md:flex-row md:items-start">
-                <div>
+                <div className="min-w-0">
                   <RunStatusBadge
                     status={
                       runQuery.data.run
@@ -150,7 +173,7 @@ export function RunDetailPage() {
                     }
                   />
 
-                  <h2 className="mt-3 text-2xl font-semibold">
+                  <h2 className="mt-3 break-words text-2xl font-semibold">
                     {
                       runQuery.data.run
                         .displayTitle
@@ -172,10 +195,9 @@ export function RunDetailPage() {
                   <div className="mt-4 flex flex-wrap gap-4 text-sm text-zinc-500">
                     <span>
                       Branch:{" "}
-                      {
-                        runQuery.data.run
-                          .headBranch
-                      }
+                      {runQuery.data.run
+                        .headBranch ??
+                        "unknown"}
                     </span>
 
                     <span>
@@ -196,20 +218,30 @@ export function RunDetailPage() {
                   </div>
                 </div>
 
-                <a
-                  href={
-                    runQuery.data.run
-                      .htmlUrl
-                  }
-                  target="_blank"
-                  rel="noreferrer"
-                  className="inline-flex items-center gap-2 rounded-lg border border-zinc-700 px-3 py-2 text-sm hover:bg-zinc-900"
-                >
-                  Open on GitHub
-                  <ExternalLink
-                    size={15}
+                <div className="flex shrink-0 flex-col items-start gap-3 md:items-end">
+                  <RunActions
+                    owner={owner}
+                    repo={repo}
+                    run={
+                      runQuery.data.run
+                    }
                   />
-                </a>
+
+                  <a
+                    href={
+                      runQuery.data.run
+                        .htmlUrl
+                    }
+                    target="_blank"
+                    rel="noreferrer"
+                    className="inline-flex items-center gap-2 rounded-lg border border-zinc-700 px-3 py-2 text-sm transition hover:bg-zinc-900"
+                  >
+                    Open on GitHub
+                    <ExternalLink
+                      size={15}
+                    />
+                  </a>
+                </div>
               </div>
             </section>
 
@@ -219,19 +251,21 @@ export function RunDetailPage() {
               </h3>
 
               {jobsQuery.isLoading ? (
-                <div className="text-sm text-zinc-500">
+                <div className="rounded-xl border border-zinc-800 bg-zinc-900/40 p-8 text-sm text-zinc-500">
                   Loading jobs...
                 </div>
               ) : jobsQuery.isError ? (
-                <div className="text-sm text-red-400">
+                <div className="rounded-xl border border-red-900/60 bg-red-950/20 p-5 text-sm text-red-400">
                   {
                     jobsQuery.error
                       .message
                   }
                 </div>
-              ) : (
+              ) : jobsQuery.data &&
+                jobsQuery.data.jobs
+                  .length > 0 ? (
                 <div className="space-y-4">
-                  {jobsQuery.data?.jobs.map(
+                  {jobsQuery.data.jobs.map(
                     (job) => (
                       <div
                         key={job.id}
@@ -240,9 +274,7 @@ export function RunDetailPage() {
                         <div className="flex items-center justify-between gap-4">
                           <div>
                             <h4 className="font-medium">
-                              {
-                                job.name
-                              }
+                              {job.name}
                             </h4>
 
                             {job.runnerName && (
@@ -265,40 +297,48 @@ export function RunDetailPage() {
                           />
                         </div>
 
-                        <div className="mt-5 space-y-2 border-t border-zinc-800 pt-4">
-                          {job.steps.map(
-                            (step) => (
-                              <div
-                                key={
-                                  step.number
-                                }
-                                className="flex items-center justify-between gap-4 rounded-lg px-2 py-2 text-sm"
-                              >
-                                <span className="text-zinc-400">
-                                  {
+                        {job.steps.length >
+                          0 && (
+                          <div className="mt-5 space-y-2 border-t border-zinc-800 pt-4">
+                            {job.steps.map(
+                              (step) => (
+                                <div
+                                  key={
                                     step.number
                                   }
-                                  .{" "}
-                                  {
-                                    step.name
-                                  }
-                                </span>
+                                  className="flex items-center justify-between gap-4 rounded-lg px-2 py-2 text-sm"
+                                >
+                                  <span className="text-zinc-400">
+                                    {
+                                      step.number
+                                    }
+                                    .{" "}
+                                    {
+                                      step.name
+                                    }
+                                  </span>
 
-                                <RunStatusBadge
-                                  status={
-                                    step.status
-                                  }
-                                  conclusion={
-                                    step.conclusion
-                                  }
-                                />
-                              </div>
-                            ),
-                          )}
-                        </div>
+                                  <RunStatusBadge
+                                    status={
+                                      step.status
+                                    }
+                                    conclusion={
+                                      step.conclusion
+                                    }
+                                  />
+                                </div>
+                              ),
+                            )}
+                          </div>
+                        )}
                       </div>
                     ),
                   )}
+                </div>
+              ) : (
+                <div className="rounded-xl border border-zinc-800 bg-zinc-900/40 p-8 text-center text-sm text-zinc-500">
+                  No jobs found for this
+                  workflow run.
                 </div>
               )}
             </section>

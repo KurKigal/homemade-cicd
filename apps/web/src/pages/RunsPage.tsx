@@ -1,5 +1,7 @@
 import {
+  useMutation,
   useQuery,
+  useQueryClient,
 } from "@tanstack/react-query";
 
 import {
@@ -19,8 +21,13 @@ import {
   api,
 } from "../lib/api";
 
+import {
+  Play,
+} from "lucide-react";
+
 export function RunsPage() {
   const navigate = useNavigate();
+  const queryClient = useQueryClient();
 
   const {
     owner,
@@ -44,6 +51,13 @@ export function RunsPage() {
       queryFn:
         api.github.repositories,
     });
+
+  const selectedRepository =
+    repositoriesQuery.data?.find(
+      (repository) =>
+        repository.owner.login === owner &&
+        repository.name === repo,
+    );
 
   const runsQuery = useQuery({
     queryKey: [
@@ -70,6 +84,32 @@ export function RunsPage() {
       Boolean(owner && repo),
 
     refetchInterval: 10_000,
+  });
+
+  const dispatchMutation = useMutation({
+    mutationFn: async () => {
+      if (!owner || !repo || !selectedRepository) {
+        throw new Error(
+          "Repository not selected.",
+        );
+      }
+
+      return api.github.dispatchWorkflow(
+        owner,
+        repo,
+        selectedRepository.defaultBranch
+      );
+    },
+    onSuccess: async () => {
+      await queryClient.invalidateQueries({
+        queryKey: [
+          "github",
+          "runs",
+          owner,
+          repo,
+        ],
+      });
+    },
   });
 
   function refresh() {
@@ -132,40 +172,106 @@ export function RunsPage() {
               </p>
             </div>
 
-            <select
-              value={
-                owner && repo
-                  ? `${owner}/${repo}`
-                  : ""
-              }
-              onChange={(event) =>
-                selectRepository(
-                  event.target.value,
-                )
-              }
-              className="h-10 min-w-72 rounded-lg border border-zinc-800 bg-zinc-900 px-3 text-sm outline-none focus:border-zinc-600"
-            >
-              <option value="">
-                Select repository
-              </option>
+            <div className="flex flex-col gap-3 sm:flex-row">
+              <select
+                value={
+                  owner && repo
+                    ? `${owner}/${repo}`
+                    : ""
+                }
+                onChange={(event) =>
+                  selectRepository(
+                    event.target.value,
+                  )
+                }
+                className="h-10 min-w-72 rounded-lg border border-zinc-800 bg-zinc-900 px-3 text-sm outline-none focus:border-zinc-600"
+              >
+                <option value="">
+                  Select repository
+                </option>
 
-              {repositoriesQuery.data?.map(
-                (repository) => (
-                  <option
-                    key={
-                      repository.id
-                    }
+                {repositoriesQuery.data?.map(
+                  (repository) => (
+                    <option
+                      key={
+                        repository.id
+                      }
+                      value={
+                        repository.fullName
+                      }
+                    >
+                      {
+                        repository.fullName
+                      }
+                    </option>
+                  ),
+                )}
+              </select>
+
+              <div className="flex flex-col gap-3">
+                <div className="flex flex-col gap-3 sm:flex-row">
+                  <select
                     value={
-                      repository.fullName
+                      owner && repo
+                        ? `${owner}/${repo}`
+                        : ""
                     }
+                    onChange={(event) =>
+                      selectRepository(event.target.value)
+                    }
+                    className="h-10 min-w-72 rounded-lg border border-zinc-800 bg-zinc-900 px-3 text-sm outline-none focus:border-zinc-600"
                   >
-                    {
-                      repository.fullName
-                    }
-                  </option>
-                ),
-              )}
-            </select>
+                    <option value="">
+                      Select repository
+                    </option>
+
+                    {repositoriesQuery.data?.map(
+                      (repository) => (
+                        <option
+                          key={repository.id}
+                          value={repository.fullName}
+                        >
+                          {repository.fullName}
+                        </option>
+                      ),
+                    )}
+                  </select>
+
+                  {owner &&
+                    repo &&
+                    selectedRepository && (
+                      <button
+                        type="button"
+                        onClick={() =>
+                          dispatchMutation.mutate()
+                        }
+                        disabled={
+                          dispatchMutation.isPending
+                        }
+                        className="inline-flex h-10 items-center justify-center gap-2 rounded-lg bg-zinc-100 px-4 text-sm font-medium text-zinc-950 transition hover:bg-white disabled:cursor-not-allowed disabled:opacity-50"
+                      >
+                        <Play size={15} />
+
+                        {dispatchMutation.isPending
+                          ? "Starting..."
+                          : "Run Now"}
+                      </button>
+                    )}
+                </div>
+
+                {dispatchMutation.isError && (
+                  <p className="text-sm text-red-400">
+                    {dispatchMutation.error.message}
+                  </p>
+                )}
+
+                {dispatchMutation.isSuccess && (
+                  <p className="text-sm text-emerald-400">
+                    {dispatchMutation.data.message}
+                  </p>
+                )}
+              </div>
+            </div>
           </div>
         </section>
 

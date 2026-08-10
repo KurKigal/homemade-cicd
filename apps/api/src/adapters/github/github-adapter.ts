@@ -33,6 +33,55 @@ interface WriteTextFileInput {
 export class GitHubAdapter
   implements RepositoryReader
 {
+  async dispatchWorkflow(
+    owner: string,
+    repo: string,
+    workflowId: string,
+    ref: string,
+  ): Promise<void> {
+    await github.rest.actions.createWorkflowDispatch({
+      owner,
+      repo,
+      workflow_id: workflowId,
+      ref,
+    });
+  }
+
+  async rerunWorkflow(
+    owner: string,
+    repo: string,
+    runId: number,
+  ): Promise<void> {
+    await github.rest.actions.reRunWorkflow({
+      owner,
+      repo,
+      run_id: runId,
+    });
+  }
+
+  async rerunFailedWorkflowJobs(
+    owner: string,
+    repo: string,
+    runId: number,
+  ): Promise<void> {
+    await github.rest.actions.reRunWorkflowFailedJobs({
+      owner,
+      repo,
+      run_id: runId,
+    });
+  }
+
+  async cancelWorkflowRun(
+    owner: string,
+    repo: string,
+    runId: number,
+  ): Promise<void> {
+    await github.rest.actions.cancelWorkflowRun({
+      owner,
+      repo,
+      run_id: runId,
+    });
+  }
   async listWorkflowRuns(
     owner: string,
     repo: string,

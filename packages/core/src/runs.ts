@@ -73,3 +73,8 @@ export interface WorkflowJobsResponse {
   totalCount: number;
   jobs: WorkflowJob[];
 }
+
+export interface WorkflowCommandResult {
+  success: boolean;
+  message: string;
+}

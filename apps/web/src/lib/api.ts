@@ -13,6 +13,10 @@ import type {
   WorkflowRunsResponse,
 } from "@homemade-cicd/core";
 
+import type {
+  WorkflowCommandResult,
+} from "@homemade-cicd/core";
+
 async function request<T>(
   url: string,
   options?: RequestInit,
@@ -108,5 +112,60 @@ export const api = {
       request<WorkflowJobsResponse>(
         `/api/github/repos/${encodeURIComponent(owner)}/${encodeURIComponent(repo)}/runs/${runId}/jobs`,
       ),
+    
+    dispatchWorkflow: (
+      owner: string,
+      repo: string,
+      ref: string,
+    ) =>
+      request<WorkflowCommandResult>(
+        `/api/github/repos/${encodeURIComponent(owner)}/${encodeURIComponent(repo)}/runs/dispatch`,
+        {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify({
+            ref,
+          }),
+        },
+      ),
+
+    rerunWorkflow: (
+      owner: string,
+      repo: string,
+      runId: number,
+    ) =>
+      request<WorkflowCommandResult>(
+        `/api/github/repos/${encodeURIComponent(owner)}/${encodeURIComponent(repo)}/runs/${runId}/rerun`,
+        {
+          method: "POST",
+        },
+      ),
+
+    rerunFailedWorkflow: (
+      owner: string,
+      repo: string,
+      runId: number,
+    ) =>
+      request<WorkflowCommandResult>(
+        `/api/github/repos/${encodeURIComponent(owner)}/${encodeURIComponent(repo)}/runs/${runId}/rerun-failed`,
+        {
+          method: "POST",
+        },
+      ),
+
+    cancelWorkflow: (
+      owner: string,
+      repo: string,
+      runId: number,
+    ) =>
+      request<WorkflowCommandResult>(
+        `/api/github/repos/${encodeURIComponent(owner)}/${encodeURIComponent(repo)}/runs/${runId}/cancel`,
+        {
+          method: "POST",
+        },
+      ),
+    
   },
 };
