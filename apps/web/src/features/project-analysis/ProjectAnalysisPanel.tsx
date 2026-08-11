@@ -10,6 +10,10 @@ import type {
   SelectedRepository,
 } from "../repositories/types";
 
+import {
+  Link,
+} from "react-router";
+
 interface ProjectAnalysisPanelProps {
   repository: SelectedRepository;
 
@@ -45,13 +49,22 @@ export function ProjectAnalysisPanel({
           </h3>
         </div>
 
-        <button
-          type="button"
-          onClick={onClose}
-          className="text-sm text-zinc-500 hover:text-zinc-200"
-        >
-          Close
-        </button>
+        <div className="flex items-center gap-3">
+          <Link
+            to={`/runs/${encodeURIComponent(repository.owner)}/${encodeURIComponent(repository.name)}`}
+            className="rounded-lg border border-zinc-700 px-3 py-2 text-sm hover:bg-zinc-900"
+          >
+            View Runs
+          </Link>
+
+          <button
+            type="button"
+            onClick={onClose}
+            className="text-sm text-zinc-500 hover:text-zinc-200"
+          >
+            Close
+          </button>
+        </div>
       </div>
 
       {isLoading && (

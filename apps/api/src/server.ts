@@ -2,6 +2,9 @@ import Fastify from "fastify";
 import cors from "@fastify/cors";
 import { githubRoutes } from "./routes/github.js";
 import { pipelineRoutes } from "./routes/pipelines.js";
+import {
+  runsRoutes,
+} from "./routes/runs.js";
 
 const app = Fastify({
   logger: true,
@@ -16,6 +19,10 @@ app.get("/health", async () => {
     status: "ok",
     service: "homemade-cicd-api",
   };
+});
+
+await app.register(runsRoutes, {
+  prefix: "/api",
 });
 
 await app.register(githubRoutes, {
