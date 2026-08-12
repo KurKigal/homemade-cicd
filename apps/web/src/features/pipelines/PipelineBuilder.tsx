@@ -1,5 +1,4 @@
 import {
-  useEffect,
   useState,
 } from "react";
 
@@ -67,6 +66,34 @@ export function PipelineBuilder({
   repo,
   defaultBranch,
   initialConfig,
+  mode,
+  onApplied,
+}: PipelineBuilderProps) {
+  const resetKey = JSON.stringify({
+    owner,
+    repo,
+    defaultBranch,
+    initialConfig,
+  });
+
+  return (
+    <PipelineBuilderForm
+      key={resetKey}
+      owner={owner}
+      repo={repo}
+      defaultBranch={defaultBranch}
+      initialConfig={initialConfig}
+      mode={mode}
+      onApplied={onApplied}
+    />
+  );
+}
+
+function PipelineBuilderForm({
+  owner,
+  repo,
+  defaultBranch,
+  initialConfig,
   mode = "create",
   onApplied,
 }: PipelineBuilderProps) {
@@ -93,24 +120,6 @@ export function PipelineBuilder({
 
   const [error, setError] =
     useState<string | null>(null);
-
-  useEffect(() => {
-    setConfig(
-      initialConfig ??
-        createDefaultConfig(
-          defaultBranch,
-        ),
-    );
-
-    setPreview(null);
-    setSuccess(null);
-    setError(null);
-  }, [
-    owner,
-    repo,
-    defaultBranch,
-    initialConfig,
-  ]);
 
   async function previewPipeline() {
     setError(null);
