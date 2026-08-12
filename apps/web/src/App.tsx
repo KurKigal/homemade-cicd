@@ -5,6 +5,10 @@ import {
 } from "react-router";
 
 import {
+  PipelinesPage,
+} from "./pages/PipelinesPage";
+
+import {
   ProjectsPage,
 } from "./pages/ProjectsPage";
 
@@ -31,22 +35,44 @@ function App() {
 
       <Route
         path="/projects"
-        element={<ProjectsPage />}
+        element={
+          <ProjectsPage />
+        }
       />
 
       <Route
         path="/runs"
-        element={<RunsPage />}
+        element={
+          <RunsPage />
+        }
       />
 
       <Route
         path="/runs/:owner/:repo"
-        element={<RunsPage />}
+        element={
+          <RunsPage />
+        }
       />
 
       <Route
         path="/runs/:owner/:repo/:runId"
-        element={<RunDetailPage />}
+        element={
+          <RunDetailPage />
+        }
+      />
+
+      <Route
+        path="/pipelines"
+        element={
+          <PipelinesPage />
+        }
+      />
+
+      <Route
+        path="/pipelines/:owner/:repo"
+        element={
+          <PipelinesPage />
+        }
       />
 
       <Route

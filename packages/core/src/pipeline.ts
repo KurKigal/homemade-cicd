@@ -48,3 +48,36 @@ export interface PipelineApplyResult {
     created: boolean;
   };
 }
+
+export interface RepositoryWorkflow {
+  id: number;
+
+  name: string;
+  path: string;
+  state: string;
+
+  htmlUrl: string;
+
+  createdAt: string;
+  updatedAt: string;
+
+  managedByHomemade: boolean;
+}
+
+export interface RepositoryWorkflowsResponse {
+  totalCount: number;
+  workflows: RepositoryWorkflow[];
+}
+
+export interface PipelineDetailsResponse {
+  workflow: RepositoryWorkflow;
+
+  yaml: string | null;
+
+  config: FlutterPipelineConfig | null;
+}
+
+export interface PipelineCommandResult {
+  success: boolean;
+  message: string;
+}

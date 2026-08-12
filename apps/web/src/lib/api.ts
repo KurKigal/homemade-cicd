@@ -10,6 +10,9 @@ import type {
   WorkflowJobsResponse,
   WorkflowRunResponse,
   WorkflowRunsResponse,
+  PipelineCommandResult,
+  PipelineDetailsResponse,
+  RepositoryWorkflowsResponse,
 } from "@homemade-cicd/core";
 
 async function request<T>(
@@ -171,5 +174,59 @@ export const api = {
         `/api/github/repos/${encodeURIComponent(owner)}/${encodeURIComponent(repo)}/runs/${runId}/artifacts`,
       ),
     
+
+    pipelines: (
+      owner: string,
+      repo: string,
+    ) =>
+      request<RepositoryWorkflowsResponse>(
+        `/api/github/repos/${encodeURIComponent(owner)}/${encodeURIComponent(repo)}/pipelines`,
+      ),
+
+    pipelineDetails: (
+      owner: string,
+      repo: string,
+      workflowId: number,
+    ) =>
+      request<PipelineDetailsResponse>(
+        `/api/github/repos/${encodeURIComponent(owner)}/${encodeURIComponent(repo)}/pipelines/${workflowId}`,
+      ),
+
+    enablePipeline: (
+      owner: string,
+      repo: string,
+      workflowId: number,
+    ) =>
+      request<PipelineCommandResult>(
+        `/api/github/repos/${encodeURIComponent(owner)}/${encodeURIComponent(repo)}/pipelines/${workflowId}/enable`,
+        {
+          method: "POST",
+        },
+      ),
+
+    disablePipeline: (
+      owner: string,
+      repo: string,
+      workflowId: number,
+    ) =>
+      request<PipelineCommandResult>(
+        `/api/github/repos/${encodeURIComponent(owner)}/${encodeURIComponent(repo)}/pipelines/${workflowId}/disable`,
+        {
+          method: "POST",
+        },
+      ),
+
+    deletePipeline: (
+      owner: string,
+      repo: string,
+      workflowId: number,
+    ) =>
+      request<PipelineCommandResult>(
+        `/api/github/repos/${encodeURIComponent(owner)}/${encodeURIComponent(repo)}/pipelines/${workflowId}`,
+        {
+          method: "DELETE",
+        },
+      ),
+
   },
 };

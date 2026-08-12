@@ -4,6 +4,7 @@ import type {
   WorkflowArtifact,
   WorkflowJob,
   WorkflowRun,
+  RepositoryWorkflow,
 } from "@homemade-cicd/core";
 
 import {
@@ -418,6 +419,7 @@ export class GitHubAdapter
     owner: string,
     repo: string,
     path: string,
+    ref?: string,
   ): Promise<string | null> {
     try {
       const { data } =
@@ -425,6 +427,11 @@ export class GitHubAdapter
           owner,
           repo,
           path,
+              ...(ref
+      ? {
+          ref,
+        }
+      : {}),
         });
 
       if (
@@ -480,6 +487,7 @@ export class GitHubAdapter
     owner: string,
     repo: string,
     path: string,
+    ref?: string,
   ): Promise<string | undefined> {
     try {
       const { data } =
@@ -487,6 +495,11 @@ export class GitHubAdapter
           owner,
           repo,
           path,
+              ...(ref
+      ? {
+          ref,
+        }
+      : {}),
         });
 
       if (
@@ -543,6 +556,174 @@ export class GitHubAdapter
         response.data.commit.html_url,
     };
   }
+
+  async getRepositoryDefaultBranch(
+    owner: string,
+    repo: string,
+  ): Promise<string> {
+    const { data } =
+      await github.rest.repos.get({
+        owner,
+        repo,
+      });
+
+    return data.default_branch;
+  }
+
+  async listRepositoryWorkflows(
+    owner: string,
+    repo: string,
+  ): Promise<{
+    totalCount: number;
+    workflows: RepositoryWorkflow[];
+  }> {
+    const { data } =
+      await github.rest.actions.listRepoWorkflows({
+        owner,
+        repo,
+        per_page: 100,
+      });
+
+    return {
+      totalCount:
+        data.total_count,
+
+      workflows:
+        data.workflows.map(
+          (workflow) =>
+            this.mapRepositoryWorkflow(
+              workflow,
+            ),
+        ),
+    };
+  }
+
+  async getRepositoryWorkflow(
+    owner: string,
+    repo: string,
+    workflowId: number,
+  ): Promise<RepositoryWorkflow> {
+    const { data } =
+      await github.rest.actions.getWorkflow({
+        owner,
+        repo,
+        workflow_id:
+          workflowId,
+      });
+
+    return this.mapRepositoryWorkflow(
+      data,
+    );
+  }
+
+
+  private mapRepositoryWorkflow(
+    workflow: {
+      id: number;
+      name: string;
+      path: string;
+      state: string;
+      html_url: string;
+      created_at: string;
+      updated_at: string;
+    },
+  ): RepositoryWorkflow {
+    return {
+      id:
+        workflow.id,
+
+      name:
+        workflow.name,
+
+      path:
+        workflow.path,
+
+      state:
+        workflow.state,
+
+      htmlUrl:
+        workflow.html_url,
+
+      createdAt:
+        workflow.created_at,
+
+      updatedAt:
+        workflow.updated_at,
+
+      managedByHomemade:
+        workflow.path ===
+        ".github/workflows/homemade-ci.yml",
+    };
+  }
+
+  async enableWorkflow(
+    owner: string,
+    repo: string,
+    workflowId: number,
+  ): Promise<void> {
+    await github.rest.actions.enableWorkflow({
+      owner,
+      repo,
+
+      workflow_id:
+        workflowId,
+    });
+  }
+
+  async disableWorkflow(
+    owner: string,
+    repo: string,
+    workflowId: number,
+  ): Promise<void> {
+    await github.rest.actions.disableWorkflow({
+      owner,
+      repo,
+
+      workflow_id:
+        workflowId,
+    });
+  }
+
+  async deleteTextFile({
+    owner,
+    repo,
+    path,
+    branch,
+    message,
+    sha,
+  }: {
+    owner: string;
+    repo: string;
+    path: string;
+    branch: string;
+    message: string;
+    sha: string;
+  }): Promise<{
+    commitSha: string | null;
+    commitUrl: string | null;
+  }> {
+    const response =
+      await github.rest.repos.deleteFile({
+        owner,
+        repo,
+        path,
+        branch,
+        message,
+        sha,
+      });
+
+    return {
+      commitSha:
+        response.data.commit.sha ??
+        null,
+
+      commitUrl:
+        response.data.commit
+          .html_url ??
+        null,
+    };
+  }
+
 }
 
 export const githubAdapter =
