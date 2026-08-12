@@ -4,6 +4,47 @@ import type {
   FlutterPipelineConfig,
 } from "@homemade-cicd/core";
 
+type WorkflowStep = Record<string, unknown>;
+
+function createFlutterSetupSteps(
+  includeJava = false,
+): WorkflowStep[] {
+  return [
+    {
+      name: "Checkout repository",
+      uses: "actions/checkout@v4",
+    },
+    ...(includeJava
+      ? [
+          {
+            name: "Set up Java",
+            uses: "actions/setup-java@v4",
+            with: {
+              distribution: "temurin",
+              "java-version": "17",
+            },
+          },
+        ]
+      : []),
+    {
+      name: "Set up Flutter",
+      uses: "subosito/flutter-action@v2",
+      with: {
+        channel: "stable",
+        cache: true,
+      },
+    },
+    {
+      name: "Install dependencies",
+      run: "flutter pub get",
+    },
+  ];
+}
+
+function qualityDependency(enabled: boolean) {
+  return enabled ? { needs: "quality" } : {};
+}
+
 export function generateFlutterWorkflow(
   config: FlutterPipelineConfig,
 ): string {
@@ -31,24 +72,7 @@ export function generateFlutterWorkflow(
     config.checks.analyze || config.checks.test;
 
   if (qualityEnabled) {
-    const qualitySteps: unknown[] = [
-      {
-        name: "Checkout repository",
-        uses: "actions/checkout@v4",
-      },
-      {
-        name: "Set up Flutter",
-        uses: "subosito/flutter-action@v2",
-        with: {
-          channel: "stable",
-          cache: true,
-        },
-      },
-      {
-        name: "Install dependencies",
-        run: "flutter pub get",
-      },
-    ];
+    const qualitySteps = createFlutterSetupSteps();
 
     if (config.checks.analyze) {
       qualitySteps.push({
@@ -75,32 +99,7 @@ export function generateFlutterWorkflow(
     config.android.enabled &&
     (config.android.apk || config.android.aab)
   ) {
-    const androidSteps: unknown[] = [
-      {
-        name: "Checkout repository",
-        uses: "actions/checkout@v4",
-      },
-      {
-        name: "Set up Java",
-        uses: "actions/setup-java@v4",
-        with: {
-          distribution: "temurin",
-          "java-version": "17",
-        },
-      },
-      {
-        name: "Set up Flutter",
-        uses: "subosito/flutter-action@v2",
-        with: {
-          channel: "stable",
-          cache: true,
-        },
-      },
-      {
-        name: "Install dependencies",
-        run: "flutter pub get",
-      },
-    ];
+    const androidSteps = createFlutterSetupSteps(true);
 
     if (config.android.apk) {
       androidSteps.push(
@@ -142,11 +141,7 @@ export function generateFlutterWorkflow(
       name: "Android build",
       "runs-on": "ubuntu-latest",
 
-      ...(qualityEnabled
-        ? {
-            needs: "quality",
-          }
-        : {}),
+      ...qualityDependency(qualityEnabled),
 
       steps: androidSteps,
     };
@@ -160,29 +155,10 @@ export function generateFlutterWorkflow(
       name: "iOS build",
       "runs-on": "macos-latest",
 
-      ...(qualityEnabled
-        ? {
-            needs: "quality",
-          }
-        : {}),
+      ...qualityDependency(qualityEnabled),
 
       steps: [
-        {
-          name: "Checkout repository",
-          uses: "actions/checkout@v4",
-        },
-        {
-          name: "Set up Flutter",
-          uses: "subosito/flutter-action@v2",
-          with: {
-            channel: "stable",
-            cache: true,
-          },
-        },
-        {
-          name: "Install dependencies",
-          run: "flutter pub get",
-        },
+        ...createFlutterSetupSteps(),
         {
           name: "Build iOS without code signing",
           run:

@@ -17,6 +17,8 @@ import {
   api,
 } from "../../lib/api";
 
+import { queryKeys } from "../../lib/query-keys";
+
 interface RunActionsProps {
   owner: string;
   repo: string;
@@ -34,32 +36,15 @@ export function RunActions({
   async function refreshRunData() {
     await Promise.all([
       queryClient.invalidateQueries({
-        queryKey: [
-          "github",
-          "run",
-          owner,
-          repo,
-          run.id,
-        ],
+        queryKey: queryKeys.run(owner, repo, run.id),
       }),
 
       queryClient.invalidateQueries({
-        queryKey: [
-          "github",
-          "run-jobs",
-          owner,
-          repo,
-          run.id,
-        ],
+        queryKey: queryKeys.runJobs(owner, repo, run.id),
       }),
 
       queryClient.invalidateQueries({
-        queryKey: [
-          "github",
-          "runs",
-          owner,
-          repo,
-        ],
+        queryKey: queryKeys.runs(owner, repo),
       }),
     ]);
   }

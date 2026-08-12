@@ -21,6 +21,17 @@ import {
   api,
 } from "../lib/api";
 
+import { queryKeys } from "../lib/query-keys";
+
+import {
+  useGitHubUser,
+  useRepositories,
+} from "../features/repositories/hooks";
+
+import {
+  RepositorySelect,
+} from "../features/repositories/RepositorySelect";
+
 import {
   Play,
 } from "lucide-react";
@@ -37,20 +48,8 @@ export function RunsPage() {
     repo: string;
   }>();
 
-  const userQuery = useQuery({
-    queryKey: ["github", "me"],
-    queryFn: api.github.me,
-  });
-
-  const repositoriesQuery =
-    useQuery({
-      queryKey: [
-        "github",
-        "repositories",
-      ],
-      queryFn:
-        api.github.repositories,
-    });
+  const userQuery = useGitHubUser();
+  const repositoriesQuery = useRepositories();
 
   const selectedRepository =
     repositoriesQuery.data?.find(
@@ -60,12 +59,7 @@ export function RunsPage() {
     );
 
   const runsQuery = useQuery({
-    queryKey: [
-      "github",
-      "runs",
-      owner,
-      repo,
-    ],
+    queryKey: queryKeys.runs(owner, repo),
 
     queryFn: () => {
       if (!owner || !repo) {
@@ -102,12 +96,7 @@ export function RunsPage() {
     },
     onSuccess: async () => {
       await queryClient.invalidateQueries({
-        queryKey: [
-          "github",
-          "runs",
-          owner,
-          repo,
-        ],
+        queryKey: queryKeys.runs(owner, repo),
       });
     },
   });
@@ -173,69 +162,14 @@ export function RunsPage() {
             </div>
 
             <div className="flex flex-col gap-3 sm:flex-row">
-              <select
-                value={
-                  owner && repo
-                    ? `${owner}/${repo}`
-                    : ""
-                }
-                onChange={(event) =>
-                  selectRepository(
-                    event.target.value,
-                  )
-                }
-                className="h-10 min-w-72 rounded-lg border border-zinc-800 bg-zinc-900 px-3 text-sm outline-none focus:border-zinc-600"
-              >
-                <option value="">
-                  Select repository
-                </option>
-
-                {repositoriesQuery.data?.map(
-                  (repository) => (
-                    <option
-                      key={
-                        repository.id
-                      }
-                      value={
-                        repository.fullName
-                      }
-                    >
-                      {
-                        repository.fullName
-                      }
-                    </option>
-                  ),
-                )}
-              </select>
-
               <div className="flex flex-col gap-3">
                 <div className="flex flex-col gap-3 sm:flex-row">
-                  <select
-                    value={
-                      owner && repo
-                        ? `${owner}/${repo}`
-                        : ""
-                    }
-                    onChange={(event) =>
-                      selectRepository(event.target.value)
-                    }
-                    className="h-10 min-w-72 rounded-lg border border-zinc-800 bg-zinc-900 px-3 text-sm outline-none focus:border-zinc-600"
-                  >
-                    <option value="">
-                      Select repository
-                    </option>
-
-                    {repositoriesQuery.data?.map(
-                      (repository) => (
-                        <option
-                          key={repository.id}
-                          value={repository.fullName}
-                        >
-                          {repository.fullName}
-                        </option>
-                      ),
-                    )}
-                  </select>
+                  <RepositorySelect
+                    owner={owner}
+                    repo={repo}
+                    repositories={repositoriesQuery.data ?? []}
+                    onChange={selectRepository}
+                  />
 
                   {owner &&
                     repo &&

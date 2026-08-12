@@ -8,6 +8,11 @@ import type {
 } from "@homemade-cicd/core";
 
 import {
+  mapRepositoryWorkflow,
+  mapWorkflowRun,
+} from "./github-mappers.js";
+
+import {
   env,
 } from "../../config/env.js";
 
@@ -107,7 +112,7 @@ export class GitHubAdapter
       totalCount: data.total_count,
 
       runs: data.workflow_runs.map((run) =>
-        this.mapWorkflowRun(run),
+        mapWorkflowRun(run),
       ),
     };
   }
@@ -124,7 +129,7 @@ export class GitHubAdapter
         run_id: runId,
       });
 
-    return this.mapWorkflowRun(data);
+    return mapWorkflowRun(data);
   }
 
   async listWorkflowRunJobs(
@@ -295,59 +300,6 @@ export class GitHubAdapter
     }
 
     return location;
-  }
-
-  private mapWorkflowRun(
-    run: Awaited<
-      ReturnType<
-        typeof github.rest.actions.getWorkflowRun
-      >
-    >["data"],
-  ): WorkflowRun {
-    return {
-      id: run.id,
-
-      workflowName:
-        run.name ?? "GitHub Actions",
-
-      displayTitle:
-        run.display_title ??
-        run.name ??
-        "Workflow run",
-
-      runNumber: run.run_number,
-
-      attempt:
-        run.run_attempt ?? 1,
-
-      event: run.event,
-
-      status: run.status ?? "unknown",
-
-      conclusion:
-        run.conclusion ?? null,
-
-      headBranch:
-        run.head_branch ?? null,
-
-      headSha: run.head_sha,
-
-      htmlUrl: run.html_url,
-
-      createdAt: run.created_at,
-      updatedAt: run.updated_at,
-
-      startedAt:
-        run.run_started_at ?? null,
-
-      actor: run.actor
-        ? {
-            login: run.actor.login,
-            avatarUrl:
-              run.actor.avatar_url,
-          }
-        : null,
-    };
   }
 
   async getAuthenticatedUser(): Promise<GitHubUser> {
@@ -591,7 +543,7 @@ export class GitHubAdapter
       workflows:
         data.workflows.map(
           (workflow) =>
-            this.mapRepositoryWorkflow(
+            mapRepositoryWorkflow(
               workflow,
             ),
         ),
@@ -611,49 +563,9 @@ export class GitHubAdapter
           workflowId,
       });
 
-    return this.mapRepositoryWorkflow(
+    return mapRepositoryWorkflow(
       data,
     );
-  }
-
-
-  private mapRepositoryWorkflow(
-    workflow: {
-      id: number;
-      name: string;
-      path: string;
-      state: string;
-      html_url: string;
-      created_at: string;
-      updated_at: string;
-    },
-  ): RepositoryWorkflow {
-    return {
-      id:
-        workflow.id,
-
-      name:
-        workflow.name,
-
-      path:
-        workflow.path,
-
-      state:
-        workflow.state,
-
-      htmlUrl:
-        workflow.html_url,
-
-      createdAt:
-        workflow.created_at,
-
-      updatedAt:
-        workflow.updated_at,
-
-      managedByHomemade:
-        workflow.path ===
-        ".github/workflows/homemade-ci.yml",
-    };
   }
 
   async enableWorkflow(

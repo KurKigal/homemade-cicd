@@ -1,7 +1,4 @@
-import type {
-  FastifyInstance,
-} from "fastify";
-
+import type { FastifyInstance } from "fastify";
 import { z } from "zod";
 
 import {
@@ -14,66 +11,50 @@ import {
   rerunRepositoryWorkflow,
 } from "../services/runs/runs-service.js";
 
+import {
+  parseRouteInput,
+  repositoryParamsSchema,
+  runParamsSchema,
+} from "./validation.js";
+
 const workflowDispatchSchema = z.object({
   ref: z.string().min(1),
 });
 
-const repositoryParamsSchema = z.object({
-  owner: z.string().min(1),
-  repo: z.string().min(1),
-});
-
-const runParamsSchema = z.object({
-  owner: z.string().min(1),
-  repo: z.string().min(1),
-
-  runId: z.coerce
-    .number()
-    .int()
-    .positive(),
-});
-
 const runsQuerySchema = z.object({
-  perPage: z.coerce
-    .number()
-    .int()
-    .min(1)
-    .max(100)
-    .default(30),
+  perPage: z.coerce.number().int().min(1).max(100).default(30),
 });
 
-export async function runsRoutes(
-  app: FastifyInstance,
-) {
+export async function runsRoutes(app: FastifyInstance) {
   app.get(
     "/github/repos/:owner/:repo/runs",
     async (request, reply) => {
-      const params =
-        repositoryParamsSchema.safeParse(
-          request.params,
-        );
+      const params = parseRouteInput(
+        repositoryParamsSchema,
+        request.params,
+        reply,
+        "Invalid repository.",
+      );
 
-      const query =
-        runsQuerySchema.safeParse(
-          request.query,
-        );
-
-      if (!params.success) {
-        return reply.status(400).send({
-          error: "Invalid repository.",
-        });
+      if (!params) {
+        return;
       }
 
-      if (!query.success) {
-        return reply.status(400).send({
-          error: "Invalid query parameters.",
-        });
+      const query = parseRouteInput(
+        runsQuerySchema,
+        request.query,
+        reply,
+        "Invalid query parameters.",
+      );
+
+      if (!query) {
+        return;
       }
 
       return listRepositoryRuns(
-        params.data.owner,
-        params.data.repo,
-        query.data.perPage,
+        params.owner,
+        params.repo,
+        query.perPage,
       );
     },
   );
@@ -81,48 +62,45 @@ export async function runsRoutes(
   app.get(
     "/github/repos/:owner/:repo/runs/:runId",
     async (request, reply) => {
-      const params =
-        runParamsSchema.safeParse(
-          request.params,
-        );
+      const params = parseRouteInput(
+        runParamsSchema,
+        request.params,
+        reply,
+        "Invalid workflow run.",
+      );
 
-      if (!params.success) {
-        return reply.status(400).send({
-          error: "Invalid workflow run.",
-        });
+      if (!params) {
+        return;
       }
 
-      const run =
-        await getRepositoryRun(
-          params.data.owner,
-          params.data.repo,
-          params.data.runId,
-        );
+      const run = await getRepositoryRun(
+        params.owner,
+        params.repo,
+        params.runId,
+      );
 
-      return {
-        run,
-      };
+      return { run };
     },
   );
 
   app.get(
     "/github/repos/:owner/:repo/runs/:runId/jobs",
     async (request, reply) => {
-      const params =
-        runParamsSchema.safeParse(
-          request.params,
-        );
+      const params = parseRouteInput(
+        runParamsSchema,
+        request.params,
+        reply,
+        "Invalid workflow run.",
+      );
 
-      if (!params.success) {
-        return reply.status(400).send({
-          error: "Invalid workflow run.",
-        });
+      if (!params) {
+        return;
       }
 
       return listRepositoryRunJobs(
-        params.data.owner,
-        params.data.repo,
-        params.data.runId,
+        params.owner,
+        params.repo,
+        params.runId,
       );
     },
   );
@@ -130,32 +108,32 @@ export async function runsRoutes(
   app.post(
     "/github/repos/:owner/:repo/runs/dispatch",
     async (request, reply) => {
-      const params =
-        repositoryParamsSchema.safeParse(
-          request.params,
-        );
+      const params = parseRouteInput(
+        repositoryParamsSchema,
+        request.params,
+        reply,
+        "Invalid repository.",
+      );
 
-      const body =
-        workflowDispatchSchema.safeParse(
-          request.body,
-        );
-
-      if (!params.success) {
-        return reply.status(400).send({
-          error: "Invalid repository.",
-        });
+      if (!params) {
+        return;
       }
 
-      if (!body.success) {
-        return reply.status(400).send({
-          error: "Invalid workflow ref.",
-        });
+      const body = parseRouteInput(
+        workflowDispatchSchema,
+        request.body,
+        reply,
+        "Invalid workflow ref.",
+      );
+
+      if (!body) {
+        return;
       }
 
       return dispatchRepositoryWorkflow(
-        params.data.owner,
-        params.data.repo,
-        body.data.ref,
+        params.owner,
+        params.repo,
+        body.ref,
       );
     },
   );
@@ -163,21 +141,21 @@ export async function runsRoutes(
   app.post(
     "/github/repos/:owner/:repo/runs/:runId/rerun",
     async (request, reply) => {
-      const params =
-        runParamsSchema.safeParse(
-          request.params,
-        );
+      const params = parseRouteInput(
+        runParamsSchema,
+        request.params,
+        reply,
+        "Invalid workflow run.",
+      );
 
-      if (!params.success) {
-        return reply.status(400).send({
-          error: "Invalid workflow run.",
-        });
+      if (!params) {
+        return;
       }
 
       return rerunRepositoryWorkflow(
-        params.data.owner,
-        params.data.repo,
-        params.data.runId,
+        params.owner,
+        params.repo,
+        params.runId,
       );
     },
   );
@@ -185,21 +163,21 @@ export async function runsRoutes(
   app.post(
     "/github/repos/:owner/:repo/runs/:runId/rerun-failed",
     async (request, reply) => {
-      const params =
-        runParamsSchema.safeParse(
-          request.params,
-        );
+      const params = parseRouteInput(
+        runParamsSchema,
+        request.params,
+        reply,
+        "Invalid workflow run.",
+      );
 
-      if (!params.success) {
-        return reply.status(400).send({
-          error: "Invalid workflow run.",
-        });
+      if (!params) {
+        return;
       }
 
       return rerunFailedRepositoryJobs(
-        params.data.owner,
-        params.data.repo,
-        params.data.runId,
+        params.owner,
+        params.repo,
+        params.runId,
       );
     },
   );
@@ -207,21 +185,21 @@ export async function runsRoutes(
   app.post(
     "/github/repos/:owner/:repo/runs/:runId/cancel",
     async (request, reply) => {
-      const params =
-        runParamsSchema.safeParse(
-          request.params,
-        );
+      const params = parseRouteInput(
+        runParamsSchema,
+        request.params,
+        reply,
+        "Invalid workflow run.",
+      );
 
-      if (!params.success) {
-        return reply.status(400).send({
-          error: "Invalid workflow run.",
-        });
+      if (!params) {
+        return;
       }
 
       return cancelRepositoryWorkflow(
-        params.data.owner,
-        params.data.repo,
-        params.data.runId,
+        params.owner,
+        params.repo,
+        params.runId,
       );
     },
   );

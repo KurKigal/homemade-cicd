@@ -6,16 +6,34 @@ import type {
   RepositoryReader,
 } from "./repositories/repository-reader.js";
 
+const PYTHON_MARKERS = [
+  "pyproject.toml",
+  "requirements.txt",
+  "Pipfile",
+  "setup.py",
+] as const;
+
+const NO_PLATFORMS = {
+  android: false,
+  ios: false,
+  web: false,
+} as const;
+
+function asRecord(value: unknown): Record<string, unknown> {
+  return typeof value === "object" && value !== null && !Array.isArray(value)
+    ? (value as Record<string, unknown>)
+    : {};
+}
+
 function detectNodeFramework(
   packageJsonText: string,
 ): string {
   try {
-    const packageJson =
-      JSON.parse(packageJsonText);
+    const packageJson = asRecord(JSON.parse(packageJsonText) as unknown);
 
     const dependencies = {
-      ...(packageJson.dependencies ?? {}),
-      ...(packageJson.devDependencies ?? {}),
+      ...asRecord(packageJson.dependencies),
+      ...asRecord(packageJson.devDependencies),
     };
 
     if ("next" in dependencies) {
@@ -93,11 +111,8 @@ export async function detectProject(
   const hasPackageJson =
     names.has("package.json");
 
-  const hasPythonProject =
-    names.has("pyproject.toml") ||
-    names.has("requirements.txt") ||
-    names.has("Pipfile") ||
-    names.has("setup.py");
+  const pythonSignals = PYTHON_MARKERS.filter((file) => names.has(file));
+  const hasPythonProject = pythonSignals.length > 0;
 
   const android = names.has("android");
   const ios = names.has("ios");
@@ -212,33 +227,16 @@ export async function detectProject(
    * PYTHON
    */
   if (hasPythonProject) {
-    const signals: string[] = [];
-
-    for (const file of [
-      "pyproject.toml",
-      "requirements.txt",
-      "Pipfile",
-      "setup.py",
-    ]) {
-      if (names.has(file)) {
-        signals.push(file);
-      }
-    }
-
     return {
       projectType: "python",
       framework: "Python",
       language: "Python",
       packageManager: null,
 
-      platforms: {
-        android: false,
-        ios: false,
-        web: false,
-      },
+      platforms: NO_PLATFORMS,
 
       ciConfigured: workflowsExist,
-      signals,
+      signals: pythonSignals,
     };
   }
 
@@ -248,11 +246,7 @@ export async function detectProject(
     language: null,
     packageManager: null,
 
-    platforms: {
-      android: false,
-      ios: false,
-      web: false,
-    },
+    platforms: NO_PLATFORMS,
 
     ciConfigured: workflowsExist,
     signals: [],

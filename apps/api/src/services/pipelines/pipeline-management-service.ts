@@ -4,15 +4,16 @@ import type {
 } from "@homemade-cicd/core";
 
 import {
+  HOMEMADE_WORKFLOW_PATH,
+} from "@homemade-cicd/core";
+
+import {
   githubAdapter,
 } from "../../adapters/github/github-adapter.js";
 
 import {
   parseFlutterWorkflow,
 } from "./workflow-parser.js";
-
-const HOMEMADE_PATH =
-  ".github/workflows/homemade-ci.yml";
 
 export function listRepositoryPipelines(
   owner: string,
@@ -124,7 +125,7 @@ export async function deleteManagedPipeline(
 
   if (
     workflow.path !==
-    HOMEMADE_PATH
+    HOMEMADE_WORKFLOW_PATH
   ) {
     throw new Error(
       "Only Homemade CI/CD managed pipelines can be deleted here.",

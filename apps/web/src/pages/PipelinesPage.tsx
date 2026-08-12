@@ -27,6 +27,17 @@ import {
   api,
 } from "../lib/api";
 
+import { queryKeys } from "../lib/query-keys";
+
+import {
+  useGitHubUser,
+  useRepositories,
+} from "../features/repositories/hooks";
+
+import {
+  RepositorySelect,
+} from "../features/repositories/RepositorySelect";
+
 export function PipelinesPage() {
   const navigate =
     useNavigate();
@@ -46,27 +57,8 @@ export function PipelinesPage() {
     null,
   );
 
-  const userQuery =
-    useQuery({
-      queryKey: [
-        "github",
-        "me",
-      ],
-
-      queryFn:
-        api.github.me,
-    });
-
-  const repositoriesQuery =
-    useQuery({
-      queryKey: [
-        "github",
-        "repositories",
-      ],
-
-      queryFn:
-        api.github.repositories,
-    });
+  const userQuery = useGitHubUser();
+  const repositoriesQuery = useRepositories();
 
   const selectedRepository =
     repositoriesQuery.data?.find(
@@ -78,12 +70,7 @@ export function PipelinesPage() {
 
   const pipelinesQuery =
     useQuery({
-      queryKey: [
-        "github",
-        "pipelines",
-        owner,
-        repo,
-      ],
+      queryKey: queryKeys.pipelines(owner, repo),
 
       queryFn: () => {
         if (!owner || !repo) {
@@ -171,40 +158,12 @@ export function PipelinesPage() {
               </p>
             </div>
 
-            <select
-              value={
-                owner && repo
-                  ? `${owner}/${repo}`
-                  : ""
-              }
-              onChange={(event) =>
-                selectRepository(
-                  event.target.value,
-                )
-              }
-              className="h-10 min-w-72 rounded-lg border border-zinc-800 bg-zinc-900 px-3 text-sm"
-            >
-              <option value="">
-                Select repository
-              </option>
-
-              {repositoriesQuery.data?.map(
-                (repository) => (
-                  <option
-                    key={
-                      repository.id
-                    }
-                    value={
-                      repository.fullName
-                    }
-                  >
-                    {
-                      repository.fullName
-                    }
-                  </option>
-                ),
-              )}
-            </select>
+            <RepositorySelect
+              owner={owner}
+              repo={repo}
+              repositories={repositoriesQuery.data ?? []}
+              onChange={selectRepository}
+            />
           </div>
         </section>
 

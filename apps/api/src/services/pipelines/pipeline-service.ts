@@ -2,8 +2,9 @@ import {
   githubAdapter,
 } from "../../adapters/github/github-adapter.js";
 
-const WORKFLOW_PATH =
-  ".github/workflows/homemade-ci.yml";
+import {
+  HOMEMADE_WORKFLOW_PATH,
+} from "@homemade-cicd/core";
 
 export async function saveWorkflow({
   owner,
@@ -24,7 +25,7 @@ export async function saveWorkflow({
     await githubAdapter.getFileSha(
       owner,
       repo,
-      WORKFLOW_PATH,
+      HOMEMADE_WORKFLOW_PATH,
       defaultBranch,
     );
 
@@ -34,7 +35,7 @@ export async function saveWorkflow({
       repo,
 
       path:
-        WORKFLOW_PATH,
+        HOMEMADE_WORKFLOW_PATH,
 
       branch:
         defaultBranch,
@@ -54,7 +55,7 @@ export async function saveWorkflow({
 
   return {
     path:
-      WORKFLOW_PATH,
+      HOMEMADE_WORKFLOW_PATH,
 
     commitSha:
       result.commitSha,

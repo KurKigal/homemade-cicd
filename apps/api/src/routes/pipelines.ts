@@ -1,17 +1,9 @@
-import type { FastifyInstance } from "fastify";
-import { z } from "zod";
+import type { FastifyInstance, FastifyReply } from "fastify";
 
 import {
   flutterPipelineSchema,
+  type FlutterPipelineConfig,
 } from "@homemade-cicd/core";
-
-import {
-  generateFlutterWorkflow,
-} from "../services/pipelines/workflow-generator.js";
-
-import {
-  saveWorkflow,
-} from "../services/pipelines/pipeline-service.js";
 
 import {
   deleteManagedPipeline,
@@ -20,63 +12,56 @@ import {
   getPipelineDetails,
   listRepositoryPipelines,
 } from "../services/pipelines/pipeline-management-service.js";
+import { saveWorkflow } from "../services/pipelines/pipeline-service.js";
+import { generateFlutterWorkflow } from "../services/pipelines/workflow-generator.js";
 
-const repositoryParamsSchema = z.object({
-  owner: z.string().min(1),
-  repo: z.string().min(1),
-});
+import {
+  parseRouteInput,
+  repositoryParamsSchema,
+  workflowParamsSchema,
+} from "./validation.js";
 
-const workflowParamsSchema =
-  z.object({
-    owner:
-      z.string().min(1),
+function parsePipelineConfig(
+  input: unknown,
+  reply: FastifyReply,
+): FlutterPipelineConfig | undefined {
+  const result = flutterPipelineSchema.safeParse(input);
 
-    repo:
-      z.string().min(1),
+  if (result.success) {
+    return result.data;
+  }
 
-    workflowId:
-      z.coerce
-        .number()
-        .int()
-        .positive(),
+  void reply.status(400).send({
+    error: "Invalid pipeline configuration.",
+    issues: result.error.issues,
   });
+  return undefined;
+}
 
-export async function pipelineRoutes(
-  app: FastifyInstance,
-) {
+export async function pipelineRoutes(app: FastifyInstance) {
   app.post(
     "/github/repos/:owner/:repo/pipeline/preview",
     async (request, reply) => {
-      const params =
-        repositoryParamsSchema.safeParse(
-          request.params,
-        );
-
-      if (!params.success) {
-        return reply.status(400).send({
-          error: "Invalid repository.",
-        });
-      }
-
-      const config =
-        flutterPipelineSchema.safeParse(
-          request.body,
-        );
-
-      if (!config.success) {
-        return reply.status(400).send({
-          error: "Invalid pipeline configuration.",
-          issues: config.error.issues,
-        });
-      }
-
-      const yaml = generateFlutterWorkflow(
-        config.data,
+      const params = parseRouteInput(
+        repositoryParamsSchema,
+        request.params,
+        reply,
+        "Invalid repository.",
       );
 
+      if (!params) {
+        return;
+      }
+
+      const config = parsePipelineConfig(request.body, reply);
+
+      if (!config) {
+        return;
+      }
+
       return {
-        repository: params.data,
-        yaml,
+        repository: params,
+        yaml: generateFlutterWorkflow(config),
       };
     },
   );
@@ -84,37 +69,27 @@ export async function pipelineRoutes(
   app.put(
     "/github/repos/:owner/:repo/pipeline",
     async (request, reply) => {
-      const params =
-        repositoryParamsSchema.safeParse(
-          request.params,
-        );
-
-      if (!params.success) {
-        return reply.status(400).send({
-          error: "Invalid repository.",
-        });
-      }
-
-      const config =
-        flutterPipelineSchema.safeParse(
-          request.body,
-        );
-
-      if (!config.success) {
-        return reply.status(400).send({
-          error: "Invalid pipeline configuration.",
-          issues: config.error.issues,
-        });
-      }
-
-      const yaml = generateFlutterWorkflow(
-        config.data,
+      const params = parseRouteInput(
+        repositoryParamsSchema,
+        request.params,
+        reply,
+        "Invalid repository.",
       );
 
+      if (!params) {
+        return;
+      }
+
+      const config = parsePipelineConfig(request.body, reply);
+
+      if (!config) {
+        return;
+      }
+
       const result = await saveWorkflow({
-        owner: params.data.owner,
-        repo: params.data.repo,
-        yaml,
+        owner: params.owner,
+        repo: params.repo,
+        yaml: generateFlutterWorkflow(config),
       });
 
       return {
@@ -127,44 +102,39 @@ export async function pipelineRoutes(
   app.get(
     "/github/repos/:owner/:repo/pipelines",
     async (request, reply) => {
-      const result =
-        repositoryParamsSchema.safeParse(
-          request.params,
-        );
+      const params = parseRouteInput(
+        repositoryParamsSchema,
+        request.params,
+        reply,
+        "Invalid repository.",
+      );
 
-      if (!result.success) {
-        return reply.status(400).send({
-          error:
-            "Invalid repository.",
-        });
+      if (!params) {
+        return;
       }
 
-      return listRepositoryPipelines(
-        result.data.owner,
-        result.data.repo,
-      );
+      return listRepositoryPipelines(params.owner, params.repo);
     },
   );
 
   app.get(
     "/github/repos/:owner/:repo/pipelines/:workflowId",
     async (request, reply) => {
-      const result =
-        workflowParamsSchema.safeParse(
-          request.params,
-        );
+      const params = parseRouteInput(
+        workflowParamsSchema,
+        request.params,
+        reply,
+        "Invalid pipeline.",
+      );
 
-      if (!result.success) {
-        return reply.status(400).send({
-          error:
-            "Invalid pipeline.",
-        });
+      if (!params) {
+        return;
       }
 
       return getPipelineDetails(
-        result.data.owner,
-        result.data.repo,
-        result.data.workflowId,
+        params.owner,
+        params.repo,
+        params.workflowId,
       );
     },
   );
@@ -172,70 +142,58 @@ export async function pipelineRoutes(
   app.post(
     "/github/repos/:owner/:repo/pipelines/:workflowId/enable",
     async (request, reply) => {
-      const result =
-        workflowParamsSchema.safeParse(
-          request.params,
-        );
+      const params = parseRouteInput(
+        workflowParamsSchema,
+        request.params,
+        reply,
+        "Invalid pipeline.",
+      );
 
-      if (!result.success) {
-        return reply.status(400).send({
-          error:
-            "Invalid pipeline.",
-        });
+      if (!params) {
+        return;
       }
 
-      return enablePipeline(
-        result.data.owner,
-        result.data.repo,
-        result.data.workflowId,
-      );
+      return enablePipeline(params.owner, params.repo, params.workflowId);
     },
   );
 
   app.post(
     "/github/repos/:owner/:repo/pipelines/:workflowId/disable",
     async (request, reply) => {
-      const result =
-        workflowParamsSchema.safeParse(
-          request.params,
-        );
+      const params = parseRouteInput(
+        workflowParamsSchema,
+        request.params,
+        reply,
+        "Invalid pipeline.",
+      );
 
-      if (!result.success) {
-        return reply.status(400).send({
-          error:
-            "Invalid pipeline.",
-        });
+      if (!params) {
+        return;
       }
 
-      return disablePipeline(
-        result.data.owner,
-        result.data.repo,
-        result.data.workflowId,
-      );
+      return disablePipeline(params.owner, params.repo, params.workflowId);
     },
   );
 
   app.delete(
     "/github/repos/:owner/:repo/pipelines/:workflowId",
     async (request, reply) => {
-      const result =
-        workflowParamsSchema.safeParse(
-          request.params,
-        );
+      const params = parseRouteInput(
+        workflowParamsSchema,
+        request.params,
+        reply,
+        "Invalid pipeline.",
+      );
 
-      if (!result.success) {
-        return reply.status(400).send({
-          error:
-            "Invalid pipeline.",
-        });
+      if (!params) {
+        return;
       }
 
       return deleteManagedPipeline(
-        result.data.owner,
-        result.data.repo,
-        result.data.workflowId,
+        params.owner,
+        params.repo,
+        params.workflowId,
       );
     },
   );
-
 }

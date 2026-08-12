@@ -3,33 +3,15 @@ import type {
 } from "fastify";
 
 import {
-  z,
-} from "zod";
-
-import {
   getArtifactDownloadUrl,
   listRunArtifacts,
 } from "../services/artifacts/artifacts-service.js";
 
-const runParamsSchema = z.object({
-  owner: z.string().min(1),
-  repo: z.string().min(1),
-
-  runId: z.coerce
-    .number()
-    .int()
-    .positive(),
-});
-
-const artifactParamsSchema = z.object({
-  owner: z.string().min(1),
-  repo: z.string().min(1),
-
-  artifactId: z.coerce
-    .number()
-    .int()
-    .positive(),
-});
+import {
+  artifactParamsSchema,
+  parseRouteInput,
+  runParamsSchema,
+} from "./validation.js";
 
 export async function artifactsRoutes(
   app: FastifyInstance,
@@ -37,24 +19,21 @@ export async function artifactsRoutes(
   app.get(
     "/github/repos/:owner/:repo/runs/:runId/artifacts",
     async (request, reply) => {
-      const params =
-        runParamsSchema.safeParse(
-          request.params,
-        );
+      const params = parseRouteInput(
+        runParamsSchema,
+        request.params,
+        reply,
+        "Invalid workflow run.",
+      );
 
-      if (!params.success) {
-        return reply
-          .status(400)
-          .send({
-            error:
-              "Invalid workflow run.",
-          });
+      if (!params) {
+        return;
       }
 
       return listRunArtifacts(
-        params.data.owner,
-        params.data.repo,
-        params.data.runId,
+        params.owner,
+        params.repo,
+        params.runId,
       );
     },
   );
@@ -62,25 +41,22 @@ export async function artifactsRoutes(
   app.get(
     "/github/repos/:owner/:repo/artifacts/:artifactId/download",
     async (request, reply) => {
-      const params =
-        artifactParamsSchema.safeParse(
-          request.params,
-        );
+      const params = parseRouteInput(
+        artifactParamsSchema,
+        request.params,
+        reply,
+        "Invalid artifact.",
+      );
 
-      if (!params.success) {
-        return reply
-          .status(400)
-          .send({
-            error:
-              "Invalid artifact.",
-          });
+      if (!params) {
+        return;
       }
 
       const downloadUrl =
         await getArtifactDownloadUrl(
-          params.data.owner,
-          params.data.repo,
-          params.data.artifactId,
+          params.owner,
+          params.repo,
+          params.artifactId,
         );
 
       return reply.redirect(

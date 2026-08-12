@@ -15,6 +15,8 @@ import {
   api,
 } from "../../lib/api";
 
+import { queryKeys } from "../../lib/query-keys";
+
 import {
   PipelineBuilder,
 } from "./PipelineBuilder";
@@ -37,13 +39,7 @@ export function PipelineDetailsPanel({
 
   const detailsQuery =
     useQuery({
-      queryKey: [
-        "github",
-        "pipeline",
-        owner,
-        repo,
-        workflowId,
-      ],
+      queryKey: queryKeys.pipeline(owner, repo, workflowId),
 
       queryFn: () =>
         api.github.pipelineDetails(
@@ -56,22 +52,11 @@ export function PipelineDetailsPanel({
   async function refresh() {
     await Promise.all([
       queryClient.invalidateQueries({
-        queryKey: [
-          "github",
-          "pipelines",
-          owner,
-          repo,
-        ],
+        queryKey: queryKeys.pipelines(owner, repo),
       }),
 
       queryClient.invalidateQueries({
-        queryKey: [
-          "github",
-          "pipeline",
-          owner,
-          repo,
-          workflowId,
-        ],
+        queryKey: queryKeys.pipeline(owner, repo, workflowId),
       }),
     ]);
   }
