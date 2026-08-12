@@ -6,6 +6,10 @@ import {
   runsRoutes,
 } from "./routes/runs.js";
 
+import {
+  artifactsRoutes,
+} from "./routes/artifacts.js";
+
 const app = Fastify({
   logger: true,
 });
@@ -26,6 +30,10 @@ await app.register(runsRoutes, {
 });
 
 await app.register(githubRoutes, {
+  prefix: "/api",
+});
+
+await app.register(artifactsRoutes, {
   prefix: "/api",
 });
 

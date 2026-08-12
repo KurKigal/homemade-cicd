@@ -1,9 +1,14 @@
 import type {
   GitHubUser,
   Repository,
+  WorkflowArtifact,
   WorkflowJob,
   WorkflowRun,
 } from "@homemade-cicd/core";
+
+import {
+  env,
+} from "../../config/env.js";
 
 import { github } from "../../lib/github.js";
 
@@ -169,6 +174,126 @@ export class GitHubAdapter
         })),
       })),
     };
+  }
+  
+  async listWorkflowRunArtifacts(
+    owner: string,
+    repo: string,
+    runId: number,
+  ): Promise<{
+    totalCount: number;
+    artifacts: WorkflowArtifact[];
+  }> {
+    const { data } =
+      await github.rest.actions.listWorkflowRunArtifacts({
+        owner,
+        repo,
+        run_id: runId,
+        per_page: 100,
+      });
+
+    return {
+      totalCount: data.total_count,
+
+      artifacts: data.artifacts.map((artifact) => {
+        const workflowRun =
+          artifact.workflow_run &&
+          artifact.workflow_run.id !== undefined &&
+          artifact.workflow_run.head_sha
+            ? {
+                id: artifact.workflow_run.id,
+
+                headBranch:
+                  artifact.workflow_run
+                    .head_branch ?? null,
+
+                headSha:
+                  artifact.workflow_run
+                    .head_sha,
+              }
+            : null;
+
+        return {
+          id: artifact.id,
+
+          name: artifact.name,
+
+          sizeInBytes:
+            artifact.size_in_bytes,
+
+          expired: artifact.expired,
+
+          createdAt:
+            artifact.created_at ?? null,
+
+          updatedAt:
+            artifact.updated_at ?? null,
+
+          expiresAt:
+            artifact.expires_at ?? null,
+
+          digest:
+            artifact.digest ?? null,
+
+          workflowRun,
+        };
+      }),
+    };
+  }
+
+  async getArtifactDownloadUrl(
+    owner: string,
+    repo: string,
+    artifactId: number,
+  ): Promise<string> {
+    const apiUrl =
+      `https://api.github.com/repos/` +
+      `${encodeURIComponent(owner)}/` +
+      `${encodeURIComponent(repo)}/` +
+      `actions/artifacts/${artifactId}/zip`;
+
+    const response = await fetch(
+      apiUrl,
+      {
+        method: "GET",
+
+        headers: {
+          Accept:
+            "application/vnd.github+json",
+
+          Authorization:
+            `Bearer ${env.githubToken}`,
+
+          "X-GitHub-Api-Version":
+            "2022-11-28",
+        },
+
+        redirect: "manual",
+      },
+    );
+
+    if (response.status === 410) {
+      throw new Error(
+        "Artifact has expired.",
+      );
+    }
+
+    if (response.status !== 302) {
+      throw new Error(
+        `GitHub artifact download failed with status ${response.status}.`,
+      );
+    }
+
+    const location =
+      response.headers.get("location");
+
+    if (!location) {
+      throw new Error(
+        "GitHub did not return an artifact download URL.",
+      );
+    }
+
+    return location;
   }
 
   private mapWorkflowRun(

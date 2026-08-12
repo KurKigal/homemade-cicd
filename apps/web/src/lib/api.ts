@@ -5,16 +5,11 @@ import type {
   PipelinePreview,
   Repository,
   RepositoryInspection,
-} from "@homemade-cicd/core";
-
-import type {
+  WorkflowArtifactsResponse,
+  WorkflowCommandResult,
   WorkflowJobsResponse,
   WorkflowRunResponse,
   WorkflowRunsResponse,
-} from "@homemade-cicd/core";
-
-import type {
-  WorkflowCommandResult,
 } from "@homemade-cicd/core";
 
 async function request<T>(
@@ -165,6 +160,15 @@ export const api = {
         {
           method: "POST",
         },
+      ),
+
+    workflowRunArtifacts: (
+      owner: string,
+      repo: string,
+      runId: number,
+    ) =>
+      request<WorkflowArtifactsResponse>(
+        `/api/github/repos/${encodeURIComponent(owner)}/${encodeURIComponent(repo)}/runs/${runId}/artifacts`,
       ),
     
   },

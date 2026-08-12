@@ -28,6 +28,10 @@ import {
   api,
 } from "../lib/api";
 
+import {
+  ArtifactsSection,
+} from "../features/runs/ArtifactsSection";
+
 export function RunDetailPage() {
   const {
     owner,
@@ -113,12 +117,42 @@ export function RunDetailPage() {
     refetchInterval: 10_000,
   });
 
+  const artifactsQuery =
+  useQuery({
+    queryKey: [
+      "github",
+      "run-artifacts",
+      owner,
+      repo,
+      parsedRunId,
+    ],
+
+    queryFn: () => {
+      if (!owner || !repo) {
+        throw new Error(
+          "Invalid repository.",
+        );
+      }
+
+      return api.github.workflowRunArtifacts(
+        owner,
+        repo,
+        parsedRunId,
+      );
+    },
+
+    enabled: valid,
+
+    refetchInterval: 10_000,
+  });
+
   function refresh() {
     void userQuery.refetch();
 
     if (valid) {
       void runQuery.refetch();
       void jobsQuery.refetch();
+      void artifactsQuery.refetch();
     }
   }
 
@@ -128,7 +162,8 @@ export function RunDetailPage() {
       user={userQuery.data}
       isRefreshing={
         runQuery.isFetching ||
-        jobsQuery.isFetching
+        jobsQuery.isFetching ||
+        artifactsQuery.isFetching
       }
       onRefresh={refresh}
     >
@@ -342,6 +377,21 @@ export function RunDetailPage() {
                 </div>
               )}
             </section>
+            <ArtifactsSection
+                owner={owner}
+                repo={repo}
+                artifacts={
+                  artifactsQuery.data?.artifacts ?? []
+                }
+                isLoading={
+                  artifactsQuery.isLoading
+                }
+                errorMessage={
+                  artifactsQuery.isError
+                    ? artifactsQuery.error.message
+                    : undefined
+                }
+              />
           </>
         ) : null}
       </div>
