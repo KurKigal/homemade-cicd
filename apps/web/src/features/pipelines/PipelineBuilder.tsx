@@ -1,4 +1,7 @@
-import { useState } from "react";
+import {
+  useState,
+} from "react";
+
 import {
   CheckCircle2,
   Code2,
@@ -12,45 +15,96 @@ import type {
   FlutterPipelineConfig,
 } from "@homemade-cicd/core";
 
-import { api } from "../../lib/api";
+import {
+  api,
+} from "../../lib/api";
 
 interface PipelineBuilderProps {
   owner: string;
   repo: string;
   defaultBranch: string;
+
+  initialConfig?: FlutterPipelineConfig;
+
+  mode?: "create" | "edit";
+
+  onApplied?: () => void;
+}
+
+function createDefaultConfig(
+  branch: string,
+): FlutterPipelineConfig {
+  return {
+    branch,
+
+    trigger: {
+      push: true,
+      pullRequest: true,
+      manual: true,
+    },
+
+    checks: {
+      analyze: true,
+      test: true,
+    },
+
+    android: {
+      enabled: true,
+      apk: true,
+      aab: true,
+    },
+
+    ios: {
+      enabled: true,
+      unsignedBuild: true,
+    },
+  };
 }
 
 export function PipelineBuilder({
   owner,
   repo,
   defaultBranch,
+  initialConfig,
+  mode,
+  onApplied,
+}: PipelineBuilderProps) {
+  const resetKey = JSON.stringify({
+    owner,
+    repo,
+    defaultBranch,
+    initialConfig,
+  });
+
+  return (
+    <PipelineBuilderForm
+      key={resetKey}
+      owner={owner}
+      repo={repo}
+      defaultBranch={defaultBranch}
+      initialConfig={initialConfig}
+      mode={mode}
+      onApplied={onApplied}
+    />
+  );
+}
+
+function PipelineBuilderForm({
+  owner,
+  repo,
+  defaultBranch,
+  initialConfig,
+  mode = "create",
+  onApplied,
 }: PipelineBuilderProps) {
   const [config, setConfig] =
-    useState<FlutterPipelineConfig>({
-      branch: defaultBranch,
-
-      trigger: {
-        push: true,
-        pullRequest: true,
-        manual: true,
-      },
-
-      checks: {
-        analyze: true,
-        test: true,
-      },
-
-      android: {
-        enabled: true,
-        apk: true,
-        aab: true,
-      },
-
-      ios: {
-        enabled: true,
-        unsignedBuild: true,
-      },
-    });
+    useState<FlutterPipelineConfig>(
+      () =>
+        initialConfig ??
+        createDefaultConfig(
+          defaultBranch,
+        ),
+    );
 
   const [preview, setPreview] =
     useState<string | null>(null);
@@ -80,7 +134,9 @@ export function PipelineBuilder({
           config,
         );
 
-      setPreview(result.yaml);
+      setPreview(
+        result.yaml,
+      );
     } catch (err) {
       setError(
         err instanceof Error
@@ -88,11 +144,13 @@ export function PipelineBuilder({
           : "Pipeline preview failed.",
       );
     } finally {
-      setIsPreviewing(false);
+      setIsPreviewing(
+        false,
+      );
     }
   }
 
-  async function createPipeline() {
+  async function savePipeline() {
     setError(null);
     setSuccess(null);
     setIsSaving(true);
@@ -110,11 +168,15 @@ export function PipelineBuilder({
           ? "Pipeline created successfully."
           : "Pipeline updated successfully.",
       );
+
+      onApplied?.();
     } catch (err) {
       setError(
         err instanceof Error
           ? err.message
-          : "Pipeline creation failed.",
+          : mode === "edit"
+            ? "Pipeline update failed."
+            : "Pipeline creation failed.",
       );
     } finally {
       setIsSaving(false);
@@ -135,6 +197,12 @@ export function PipelineBuilder({
         <p className="mt-2 text-sm text-zinc-500">
           {owner}/{repo}
         </p>
+
+        {mode === "edit" && (
+          <p className="mt-2 text-xs text-zinc-600">
+            Editing existing Homemade CI/CD pipeline
+          </p>
+        )}
       </div>
 
       <div className="grid gap-6 lg:grid-cols-2">
@@ -150,36 +218,48 @@ export function PipelineBuilder({
 
             <Checkbox
               label="Flutter analyze"
-              checked={config.checks.analyze}
+              checked={
+                config.checks.analyze
+              }
               onChange={(value) =>
-                setConfig((current) => ({
-                  ...current,
-                  checks: {
-                    ...current.checks,
-                    analyze: value,
-                  },
-                }))
+                setConfig(
+                  (current) => ({
+                    ...current,
+
+                    checks: {
+                      ...current.checks,
+                      analyze: value,
+                    },
+                  }),
+                )
               }
             />
 
             <Checkbox
               label="Flutter tests"
-              checked={config.checks.test}
+              checked={
+                config.checks.test
+              }
               onChange={(value) =>
-                setConfig((current) => ({
-                  ...current,
-                  checks: {
-                    ...current.checks,
-                    test: value,
-                  },
-                }))
+                setConfig(
+                  (current) => ({
+                    ...current,
+
+                    checks: {
+                      ...current.checks,
+                      test: value,
+                    },
+                  }),
+                )
               }
             />
           </div>
 
           <div className="rounded-lg border border-zinc-800 bg-zinc-950 p-4">
             <div className="mb-4 flex items-center gap-2">
-              <Smartphone size={17} />
+              <Smartphone
+                size={17}
+              />
 
               <span className="font-medium">
                 Android
@@ -188,52 +268,73 @@ export function PipelineBuilder({
 
             <Checkbox
               label="Enable Android build"
-              checked={config.android.enabled}
+              checked={
+                config.android.enabled
+              }
               onChange={(value) =>
-                setConfig((current) => ({
-                  ...current,
-                  android: {
-                    ...current.android,
-                    enabled: value,
-                  },
-                }))
+                setConfig(
+                  (current) => ({
+                    ...current,
+
+                    android: {
+                      ...current.android,
+                      enabled: value,
+                    },
+                  }),
+                )
               }
             />
 
             <Checkbox
               label="Build APK"
-              checked={config.android.apk}
-              disabled={!config.android.enabled}
+              checked={
+                config.android.apk
+              }
+              disabled={
+                !config.android.enabled
+              }
               onChange={(value) =>
-                setConfig((current) => ({
-                  ...current,
-                  android: {
-                    ...current.android,
-                    apk: value,
-                  },
-                }))
+                setConfig(
+                  (current) => ({
+                    ...current,
+
+                    android: {
+                      ...current.android,
+                      apk: value,
+                    },
+                  }),
+                )
               }
             />
 
             <Checkbox
               label="Build AAB"
-              checked={config.android.aab}
-              disabled={!config.android.enabled}
+              checked={
+                config.android.aab
+              }
+              disabled={
+                !config.android.enabled
+              }
               onChange={(value) =>
-                setConfig((current) => ({
-                  ...current,
-                  android: {
-                    ...current.android,
-                    aab: value,
-                  },
-                }))
+                setConfig(
+                  (current) => ({
+                    ...current,
+
+                    android: {
+                      ...current.android,
+                      aab: value,
+                    },
+                  }),
+                )
               }
             />
           </div>
 
           <div className="rounded-lg border border-zinc-800 bg-zinc-950 p-4">
             <div className="mb-4 flex items-center gap-2">
-              <Smartphone size={17} />
+              <Smartphone
+                size={17}
+              />
 
               <span className="font-medium">
                 iOS
@@ -242,30 +343,43 @@ export function PipelineBuilder({
 
             <Checkbox
               label="Enable iOS build"
-              checked={config.ios.enabled}
+              checked={
+                config.ios.enabled
+              }
               onChange={(value) =>
-                setConfig((current) => ({
-                  ...current,
-                  ios: {
-                    ...current.ios,
-                    enabled: value,
-                  },
-                }))
+                setConfig(
+                  (current) => ({
+                    ...current,
+
+                    ios: {
+                      ...current.ios,
+                      enabled: value,
+                    },
+                  }),
+                )
               }
             />
 
             <Checkbox
               label="Unsigned iOS build"
-              checked={config.ios.unsignedBuild}
-              disabled={!config.ios.enabled}
+              checked={
+                config.ios.unsignedBuild
+              }
+              disabled={
+                !config.ios.enabled
+              }
               onChange={(value) =>
-                setConfig((current) => ({
-                  ...current,
-                  ios: {
-                    ...current.ios,
-                    unsignedBuild: value,
-                  },
-                }))
+                setConfig(
+                  (current) => ({
+                    ...current,
+
+                    ios: {
+                      ...current.ios,
+                      unsignedBuild:
+                        value,
+                    },
+                  }),
+                )
               }
             />
           </div>
@@ -287,12 +401,21 @@ export function PipelineBuilder({
               </label>
 
               <input
-                value={config.branch}
-                onChange={(event) =>
-                  setConfig((current) => ({
-                    ...current,
-                    branch: event.target.value,
-                  }))
+                value={
+                  config.branch
+                }
+                onChange={(
+                  event,
+                ) =>
+                  setConfig(
+                    (current) => ({
+                      ...current,
+
+                      branch:
+                        event.target
+                          .value,
+                    }),
+                  )
                 }
                 className="h-10 w-full rounded-lg border border-zinc-800 bg-zinc-900 px-3 text-sm outline-none focus:border-zinc-600"
               />
@@ -300,45 +423,60 @@ export function PipelineBuilder({
 
             <Checkbox
               label="Push to branch"
-              checked={config.trigger.push}
+              checked={
+                config.trigger.push
+              }
               onChange={(value) =>
-                setConfig((current) => ({
-                  ...current,
-                  trigger: {
-                    ...current.trigger,
-                    push: value,
-                  },
-                }))
+                setConfig(
+                  (current) => ({
+                    ...current,
+
+                    trigger: {
+                      ...current.trigger,
+                      push: value,
+                    },
+                  }),
+                )
               }
             />
 
             <Checkbox
               label="Pull request"
               checked={
-                config.trigger.pullRequest
+                config.trigger
+                  .pullRequest
               }
               onChange={(value) =>
-                setConfig((current) => ({
-                  ...current,
-                  trigger: {
-                    ...current.trigger,
-                    pullRequest: value,
-                  },
-                }))
+                setConfig(
+                  (current) => ({
+                    ...current,
+
+                    trigger: {
+                      ...current.trigger,
+                      pullRequest:
+                        value,
+                    },
+                  }),
+                )
               }
             />
 
             <Checkbox
               label="Manual run"
-              checked={config.trigger.manual}
+              checked={
+                config.trigger.manual
+              }
               onChange={(value) =>
-                setConfig((current) => ({
-                  ...current,
-                  trigger: {
-                    ...current.trigger,
-                    manual: value,
-                  },
-                }))
+                setConfig(
+                  (current) => ({
+                    ...current,
+
+                    trigger: {
+                      ...current.trigger,
+                      manual: value,
+                    },
+                  }),
+                )
               }
             />
           </div>
@@ -346,9 +484,14 @@ export function PipelineBuilder({
           <div className="flex gap-3">
             <button
               type="button"
-              onClick={previewPipeline}
-              disabled={isPreviewing}
-              className="flex h-10 flex-1 items-center justify-center gap-2 rounded-lg border border-zinc-700 text-sm hover:bg-zinc-900 disabled:opacity-50"
+              onClick={
+                previewPipeline
+              }
+              disabled={
+                isPreviewing ||
+                isSaving
+              }
+              className="flex h-10 flex-1 items-center justify-center gap-2 rounded-lg border border-zinc-700 text-sm transition hover:bg-zinc-900 disabled:cursor-not-allowed disabled:opacity-50"
             >
               {isPreviewing ? (
                 <Loader2
@@ -356,7 +499,9 @@ export function PipelineBuilder({
                   className="animate-spin"
                 />
               ) : (
-                <Code2 size={16} />
+                <Code2
+                  size={16}
+                />
               )}
 
               Preview
@@ -364,9 +509,14 @@ export function PipelineBuilder({
 
             <button
               type="button"
-              onClick={createPipeline}
-              disabled={isSaving}
-              className="flex h-10 flex-1 items-center justify-center gap-2 rounded-lg bg-zinc-100 text-sm font-medium text-zinc-950 hover:bg-white disabled:opacity-50"
+              onClick={
+                savePipeline
+              }
+              disabled={
+                isSaving ||
+                isPreviewing
+              }
+              className="flex h-10 flex-1 items-center justify-center gap-2 rounded-lg bg-zinc-100 text-sm font-medium text-zinc-950 transition hover:bg-white disabled:cursor-not-allowed disabled:opacity-50"
             >
               {isSaving ? (
                 <Loader2
@@ -377,13 +527,20 @@ export function PipelineBuilder({
                 <Save size={16} />
               )}
 
-              Create Pipeline
+              {isSaving
+                ? "Saving..."
+                : mode === "edit"
+                  ? "Update Pipeline"
+                  : "Create Pipeline"}
             </button>
           </div>
 
           {success && (
             <div className="flex items-center gap-2 rounded-lg border border-emerald-900 bg-emerald-950/30 p-3 text-sm text-emerald-300">
-              <CheckCircle2 size={16} />
+              <CheckCircle2
+                size={16}
+              />
+
               {success}
             </div>
           )}
@@ -420,7 +577,9 @@ function Checkbox({
   label: string;
   checked: boolean;
   disabled?: boolean;
-  onChange: (value: boolean) => void;
+  onChange: (
+    value: boolean,
+  ) => void;
 }) {
   return (
     <label
@@ -434,8 +593,12 @@ function Checkbox({
         type="checkbox"
         checked={checked}
         disabled={disabled}
-        onChange={(event) =>
-          onChange(event.target.checked)
+        onChange={(
+          event,
+        ) =>
+          onChange(
+            event.target.checked,
+          )
         }
         className="h-4 w-4"
       />

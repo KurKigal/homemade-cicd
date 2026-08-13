@@ -1,45 +1,6 @@
-import Fastify from "fastify";
-import cors from "@fastify/cors";
-import { githubRoutes } from "./routes/github.js";
-import { pipelineRoutes } from "./routes/pipelines.js";
-import {
-  runsRoutes,
-} from "./routes/runs.js";
+import { buildApp } from "./app.js";
 
-import {
-  artifactsRoutes,
-} from "./routes/artifacts.js";
-
-const app = Fastify({
-  logger: true,
-});
-
-await app.register(cors, {
-  origin: "http://localhost:5173",
-});
-
-app.get("/health", async () => {
-  return {
-    status: "ok",
-    service: "homemade-cicd-api",
-  };
-});
-
-await app.register(runsRoutes, {
-  prefix: "/api",
-});
-
-await app.register(githubRoutes, {
-  prefix: "/api",
-});
-
-await app.register(artifactsRoutes, {
-  prefix: "/api",
-});
-
-await app.register(pipelineRoutes, {
-  prefix: "/api",
-});
+const app = await buildApp();
 
 try {
   await app.listen({

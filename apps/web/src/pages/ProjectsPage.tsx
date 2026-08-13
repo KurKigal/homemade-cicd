@@ -3,11 +3,8 @@ import {
   useState,
 } from "react";
 
-import {
-  useQuery,
-} from "@tanstack/react-query";
-
 import { api } from "../lib/api";
+import { queryKeys } from "../lib/query-keys";
 
 import {
   AppLayout,
@@ -29,6 +26,13 @@ import type {
   SelectedRepository,
 } from "../features/repositories/types";
 
+import {
+  useGitHubUser,
+  useRepositories,
+} from "../features/repositories/hooks";
+
+import { useQuery } from "@tanstack/react-query";
+
 export function ProjectsPage() {
   const [search, setSearch] = useState("");
 
@@ -39,26 +43,14 @@ export function ProjectsPage() {
     null,
   );
 
-  const userQuery = useQuery({
-    queryKey: ["github", "me"],
-    queryFn: api.github.me,
-  });
-
-  const repositoriesQuery = useQuery({
-    queryKey: [
-      "github",
-      "repositories",
-    ],
-    queryFn: api.github.repositories,
-  });
+  const userQuery = useGitHubUser();
+  const repositoriesQuery = useRepositories();
 
   const inspectionQuery = useQuery({
-    queryKey: [
-      "github",
-      "inspection",
+    queryKey: queryKeys.inspection(
       selectedRepository?.owner,
       selectedRepository?.name,
-    ],
+    ),
 
     queryFn: () => {
       if (!selectedRepository) {

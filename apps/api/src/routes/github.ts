@@ -2,8 +2,6 @@ import type {
   FastifyInstance,
 } from "fastify";
 
-import { z } from "zod";
-
 import {
   getAuthenticatedGitHubUser,
   listGitHubRepositories,
@@ -13,10 +11,10 @@ import {
   inspectProject,
 } from "../services/project-analysis-service.js";
 
-const repositoryParamsSchema = z.object({
-  owner: z.string().min(1),
-  repo: z.string().min(1),
-});
+import {
+  parseRouteInput,
+  repositoryParamsSchema,
+} from "./validation.js";
 
 export async function githubRoutes(
   app: FastifyInstance,
@@ -38,19 +36,18 @@ export async function githubRoutes(
   app.get(
     "/github/repos/:owner/:repo/inspect",
     async (request, reply) => {
-      const result =
-        repositoryParamsSchema.safeParse(
-          request.params,
-        );
+      const params = parseRouteInput(
+        repositoryParamsSchema,
+        request.params,
+        reply,
+        "Invalid repository.",
+      );
 
-      if (!result.success) {
-        return reply.status(400).send({
-          error: "Invalid repository.",
-        });
+      if (!params) {
+        return reply;
       }
 
-      const { owner, repo } =
-        result.data;
+      const { owner, repo } = params;
 
       const analysis =
         await inspectProject(

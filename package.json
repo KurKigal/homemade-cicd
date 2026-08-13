@@ -10,6 +10,6 @@
     "typecheck": "pnpm -r run typecheck",
     "test": "pnpm --filter api test",
     "test:watch": "pnpm --filter api test:watch",
-    "check": "pnpm typecheck && pnpm test"
+    "check": "pnpm typecheck && pnpm test && pnpm --filter web lint && pnpm --filter web build"
   }
 }

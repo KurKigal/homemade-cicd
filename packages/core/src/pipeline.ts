@@ -1,5 +1,11 @@
 import { z } from "zod";
 
+export const HOMEMADE_WORKFLOW_FILE =
+  "homemade-ci.yml";
+
+export const HOMEMADE_WORKFLOW_PATH =
+  `.github/workflows/${HOMEMADE_WORKFLOW_FILE}`;
+
 export const flutterPipelineSchema = z.object({
   branch: z.string().min(1),
 
@@ -47,4 +53,37 @@ export interface PipelineApplyResult {
     commitUrl: string | null;
     created: boolean;
   };
+}
+
+export interface RepositoryWorkflow {
+  id: number;
+
+  name: string;
+  path: string;
+  state: string;
+
+  htmlUrl: string;
+
+  createdAt: string;
+  updatedAt: string;
+
+  managedByHomemade: boolean;
+}
+
+export interface RepositoryWorkflowsResponse {
+  totalCount: number;
+  workflows: RepositoryWorkflow[];
+}
+
+export interface PipelineDetailsResponse {
+  workflow: RepositoryWorkflow;
+
+  yaml: string | null;
+
+  config: FlutterPipelineConfig | null;
+}
+
+export interface PipelineCommandResult {
+  success: boolean;
+  message: string;
 }

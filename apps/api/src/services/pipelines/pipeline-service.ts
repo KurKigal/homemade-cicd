@@ -2,33 +2,43 @@ import {
   githubAdapter,
 } from "../../adapters/github/github-adapter.js";
 
-const WORKFLOW_PATH =
-  ".github/workflows/homemade-ci.yml";
+import {
+  HOMEMADE_WORKFLOW_PATH,
+} from "@homemade-cicd/core";
 
 export async function saveWorkflow({
   owner,
   repo,
-  branch,
   yaml,
 }: {
   owner: string;
   repo: string;
-  branch: string;
   yaml: string;
 }) {
+  const defaultBranch =
+    await githubAdapter.getRepositoryDefaultBranch(
+      owner,
+      repo,
+    );
+
   const existingSha =
     await githubAdapter.getFileSha(
       owner,
       repo,
-      WORKFLOW_PATH,
+      HOMEMADE_WORKFLOW_PATH,
+      defaultBranch,
     );
 
   const result =
     await githubAdapter.writeTextFile({
       owner,
       repo,
-      path: WORKFLOW_PATH,
-      branch,
+
+      path:
+        HOMEMADE_WORKFLOW_PATH,
+
+      branch:
+        defaultBranch,
 
       message: existingSha
         ? "ci: update Homemade CI/CD pipeline"
@@ -44,9 +54,16 @@ export async function saveWorkflow({
     });
 
   return {
-    path: WORKFLOW_PATH,
-    commitSha: result.commitSha,
-    commitUrl: result.commitUrl,
-    created: !existingSha,
+    path:
+      HOMEMADE_WORKFLOW_PATH,
+
+    commitSha:
+      result.commitSha,
+
+    commitUrl:
+      result.commitUrl,
+
+    created:
+      !existingSha,
   };
 }

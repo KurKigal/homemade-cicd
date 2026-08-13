@@ -6,6 +6,10 @@ import type {
   WorkflowCommandResult,
 } from "@homemade-cicd/core";
 
+import {
+  HOMEMADE_WORKFLOW_FILE,
+} from "@homemade-cicd/core";
+
 export function listRepositoryRuns(
   owner: string,
   repo: string,
@@ -42,9 +46,6 @@ export function listRepositoryRunJobs(
   );
 }
 
-const HOMEMADE_WORKFLOW =
-  "homemade-ci.yml";
-
 export async function dispatchRepositoryWorkflow(
   owner: string,
   repo: string,
@@ -53,7 +54,7 @@ export async function dispatchRepositoryWorkflow(
   await githubAdapter.dispatchWorkflow(
     owner,
     repo,
-    HOMEMADE_WORKFLOW,
+    HOMEMADE_WORKFLOW_FILE,
     ref,
   );
 

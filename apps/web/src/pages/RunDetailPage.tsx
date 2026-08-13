@@ -28,9 +28,15 @@ import {
   api,
 } from "../lib/api";
 
+import { queryKeys } from "../lib/query-keys";
+
+import { useGitHubUser } from "../features/repositories/hooks";
+
 import {
   ArtifactsSection,
 } from "../features/runs/ArtifactsSection";
+
+import { JobsSection } from "../features/runs/JobsSection";
 
 export function RunDetailPage() {
   const {
@@ -53,22 +59,10 @@ export function RunDetailPage() {
     ) &&
     parsedRunId > 0;
 
-  const userQuery = useQuery({
-    queryKey: [
-      "github",
-      "me",
-    ],
-    queryFn: api.github.me,
-  });
+  const userQuery = useGitHubUser();
 
   const runQuery = useQuery({
-    queryKey: [
-      "github",
-      "run",
-      owner,
-      repo,
-      parsedRunId,
-    ],
+    queryKey: queryKeys.run(owner, repo, parsedRunId),
 
     queryFn: () => {
       if (!owner || !repo) {
@@ -90,13 +84,7 @@ export function RunDetailPage() {
   });
 
   const jobsQuery = useQuery({
-    queryKey: [
-      "github",
-      "run-jobs",
-      owner,
-      repo,
-      parsedRunId,
-    ],
+    queryKey: queryKeys.runJobs(owner, repo, parsedRunId),
 
     queryFn: () => {
       if (!owner || !repo) {
@@ -117,15 +105,8 @@ export function RunDetailPage() {
     refetchInterval: 10_000,
   });
 
-  const artifactsQuery =
-  useQuery({
-    queryKey: [
-      "github",
-      "run-artifacts",
-      owner,
-      repo,
-      parsedRunId,
-    ],
+  const artifactsQuery = useQuery({
+    queryKey: queryKeys.runArtifacts(owner, repo, parsedRunId),
 
     queryFn: () => {
       if (!owner || !repo) {
@@ -280,103 +261,15 @@ export function RunDetailPage() {
               </div>
             </section>
 
-            <section>
-              <h3 className="mb-4 text-lg font-semibold">
-                Jobs
-              </h3>
-
-              {jobsQuery.isLoading ? (
-                <div className="rounded-xl border border-zinc-800 bg-zinc-900/40 p-8 text-sm text-zinc-500">
-                  Loading jobs...
-                </div>
-              ) : jobsQuery.isError ? (
-                <div className="rounded-xl border border-red-900/60 bg-red-950/20 p-5 text-sm text-red-400">
-                  {
-                    jobsQuery.error
-                      .message
-                  }
-                </div>
-              ) : jobsQuery.data &&
-                jobsQuery.data.jobs
-                  .length > 0 ? (
-                <div className="space-y-4">
-                  {jobsQuery.data.jobs.map(
-                    (job) => (
-                      <div
-                        key={job.id}
-                        className="rounded-xl border border-zinc-800 bg-zinc-900/40 p-5"
-                      >
-                        <div className="flex items-center justify-between gap-4">
-                          <div>
-                            <h4 className="font-medium">
-                              {job.name}
-                            </h4>
-
-                            {job.runnerName && (
-                              <p className="mt-1 text-xs text-zinc-600">
-                                Runner:{" "}
-                                {
-                                  job.runnerName
-                                }
-                              </p>
-                            )}
-                          </div>
-
-                          <RunStatusBadge
-                            status={
-                              job.status
-                            }
-                            conclusion={
-                              job.conclusion
-                            }
-                          />
-                        </div>
-
-                        {job.steps.length >
-                          0 && (
-                          <div className="mt-5 space-y-2 border-t border-zinc-800 pt-4">
-                            {job.steps.map(
-                              (step) => (
-                                <div
-                                  key={
-                                    step.number
-                                  }
-                                  className="flex items-center justify-between gap-4 rounded-lg px-2 py-2 text-sm"
-                                >
-                                  <span className="text-zinc-400">
-                                    {
-                                      step.number
-                                    }
-                                    .{" "}
-                                    {
-                                      step.name
-                                    }
-                                  </span>
-
-                                  <RunStatusBadge
-                                    status={
-                                      step.status
-                                    }
-                                    conclusion={
-                                      step.conclusion
-                                    }
-                                  />
-                                </div>
-                              ),
-                            )}
-                          </div>
-                        )}
-                      </div>
-                    ),
-                  )}
-                </div>
-              ) : (
-                <div className="rounded-xl border border-zinc-800 bg-zinc-900/40 p-8 text-center text-sm text-zinc-500">
-                  No jobs found for this
-                  workflow run.
-                </div>
-              )}
-            </section>
+            <JobsSection
+              jobs={jobsQuery.data?.jobs ?? []}
+              isLoading={jobsQuery.isLoading}
+              errorMessage={
+                jobsQuery.isError
+                  ? jobsQuery.error.message
+                  : undefined
+              }
+            />
             <ArtifactsSection
                 owner={owner}
                 repo={repo}

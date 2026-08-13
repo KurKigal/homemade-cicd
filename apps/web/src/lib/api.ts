@@ -2,9 +2,12 @@ import type {
   FlutterPipelineConfig,
   GitHubUser,
   PipelineApplyResult,
+  PipelineCommandResult,
+  PipelineDetailsResponse,
   PipelinePreview,
   Repository,
   RepositoryInspection,
+  RepositoryWorkflowsResponse,
   WorkflowArtifactsResponse,
   WorkflowCommandResult,
   WorkflowJobsResponse,
@@ -12,58 +15,63 @@ import type {
   WorkflowRunsResponse,
 } from "@homemade-cicd/core";
 
-async function request<T>(
-  url: string,
-  options?: RequestInit,
-): Promise<T> {
+async function request<T>(url: string, options?: RequestInit): Promise<T> {
   const response = await fetch(url, options);
 
   if (!response.ok) {
-    const message = await response
-      .text()
-      .catch(() => "");
-
+    const message = await response.text().catch(() => "");
     throw new Error(
-      message ||
-        `Request failed: ${response.status} ${response.statusText}`,
+      message || `Request failed: ${response.status} ${response.statusText}`,
     );
   }
 
   return response.json() as Promise<T>;
 }
 
+function jsonRequest<T>(
+  url: string,
+  method: "POST" | "PUT",
+  body?: unknown,
+): Promise<T> {
+  return request<T>(url, {
+    method,
+    ...(body === undefined
+      ? {}
+      : {
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(body),
+        }),
+  });
+}
+
+function repositoryUrl(owner: string, repo: string, path = ""): string {
+  return (
+    `/api/github/repos/${encodeURIComponent(owner)}/` +
+    `${encodeURIComponent(repo)}${path}`
+  );
+}
+
+function runUrl(owner: string, repo: string, runId: number, path = "") {
+  return repositoryUrl(owner, repo, `/runs/${runId}${path}`);
+}
+
 export const api = {
   github: {
-    me: () =>
-      request<GitHubUser>("/api/github/me"),
+    me: () => request<GitHubUser>("/api/github/me"),
+    repositories: () => request<Repository[]>("/api/github/repos"),
 
-    repositories: () =>
-      request<Repository[]>(
-        "/api/github/repos",
-      ),
-
-    inspectRepository: (
-      owner: string,
-      repo: string,
-    ) =>
-      request<RepositoryInspection>(
-        `/api/github/repos/${encodeURIComponent(owner)}/${encodeURIComponent(repo)}/inspect`,
-      ),
+    inspectRepository: (owner: string, repo: string) =>
+      request<RepositoryInspection>(repositoryUrl(owner, repo, "/inspect")),
 
     previewFlutterPipeline: (
       owner: string,
       repo: string,
       config: FlutterPipelineConfig,
     ) =>
-      request<PipelinePreview>(
-        `/api/github/repos/${encodeURIComponent(owner)}/${encodeURIComponent(repo)}/pipeline/preview`,
-        {
-          method: "POST",
-          headers: {
-            "Content-Type": "application/json",
-          },
-          body: JSON.stringify(config),
-        },
+      jsonRequest<PipelinePreview>(
+        repositoryUrl(owner, repo, "/pipeline/preview"),
+        "POST",
+        config,
       ),
 
     applyFlutterPipeline: (
@@ -71,105 +79,77 @@ export const api = {
       repo: string,
       config: FlutterPipelineConfig,
     ) =>
-      request<PipelineApplyResult>(
-        `/api/github/repos/${encodeURIComponent(owner)}/${encodeURIComponent(repo)}/pipeline`,
-        {
-          method: "PUT",
-          headers: {
-            "Content-Type": "application/json",
-          },
-          body: JSON.stringify(config),
-        },
+      jsonRequest<PipelineApplyResult>(
+        repositoryUrl(owner, repo, "/pipeline"),
+        "PUT",
+        config,
       ),
 
-        workflowRuns: (
-      owner: string,
-      repo: string,
-    ) =>
-      request<WorkflowRunsResponse>(
-        `/api/github/repos/${encodeURIComponent(owner)}/${encodeURIComponent(repo)}/runs`,
+    workflowRuns: (owner: string, repo: string) =>
+      request<WorkflowRunsResponse>(repositoryUrl(owner, repo, "/runs")),
+
+    workflowRun: (owner: string, repo: string, runId: number) =>
+      request<WorkflowRunResponse>(runUrl(owner, repo, runId)),
+
+    workflowRunJobs: (owner: string, repo: string, runId: number) =>
+      request<WorkflowJobsResponse>(runUrl(owner, repo, runId, "/jobs")),
+
+    dispatchWorkflow: (owner: string, repo: string, ref: string) =>
+      jsonRequest<WorkflowCommandResult>(
+        repositoryUrl(owner, repo, "/runs/dispatch"),
+        "POST",
+        { ref },
       ),
 
-    workflowRun: (
-      owner: string,
-      repo: string,
-      runId: number,
-    ) =>
-      request<WorkflowRunResponse>(
-        `/api/github/repos/${encodeURIComponent(owner)}/${encodeURIComponent(repo)}/runs/${runId}`,
+    rerunWorkflow: (owner: string, repo: string, runId: number) =>
+      jsonRequest<WorkflowCommandResult>(
+        runUrl(owner, repo, runId, "/rerun"),
+        "POST",
       ),
 
-    workflowRunJobs: (
-      owner: string,
-      repo: string,
-      runId: number,
-    ) =>
-      request<WorkflowJobsResponse>(
-        `/api/github/repos/${encodeURIComponent(owner)}/${encodeURIComponent(repo)}/runs/${runId}/jobs`,
-      ),
-    
-    dispatchWorkflow: (
-      owner: string,
-      repo: string,
-      ref: string,
-    ) =>
-      request<WorkflowCommandResult>(
-        `/api/github/repos/${encodeURIComponent(owner)}/${encodeURIComponent(repo)}/runs/dispatch`,
-        {
-          method: "POST",
-          headers: {
-            "Content-Type": "application/json",
-          },
-          body: JSON.stringify({
-            ref,
-          }),
-        },
+    rerunFailedWorkflow: (owner: string, repo: string, runId: number) =>
+      jsonRequest<WorkflowCommandResult>(
+        runUrl(owner, repo, runId, "/rerun-failed"),
+        "POST",
       ),
 
-    rerunWorkflow: (
-      owner: string,
-      repo: string,
-      runId: number,
-    ) =>
-      request<WorkflowCommandResult>(
-        `/api/github/repos/${encodeURIComponent(owner)}/${encodeURIComponent(repo)}/runs/${runId}/rerun`,
-        {
-          method: "POST",
-        },
+    cancelWorkflow: (owner: string, repo: string, runId: number) =>
+      jsonRequest<WorkflowCommandResult>(
+        runUrl(owner, repo, runId, "/cancel"),
+        "POST",
       ),
 
-    rerunFailedWorkflow: (
-      owner: string,
-      repo: string,
-      runId: number,
-    ) =>
-      request<WorkflowCommandResult>(
-        `/api/github/repos/${encodeURIComponent(owner)}/${encodeURIComponent(repo)}/runs/${runId}/rerun-failed`,
-        {
-          method: "POST",
-        },
-      ),
-
-    cancelWorkflow: (
-      owner: string,
-      repo: string,
-      runId: number,
-    ) =>
-      request<WorkflowCommandResult>(
-        `/api/github/repos/${encodeURIComponent(owner)}/${encodeURIComponent(repo)}/runs/${runId}/cancel`,
-        {
-          method: "POST",
-        },
-      ),
-
-    workflowRunArtifacts: (
-      owner: string,
-      repo: string,
-      runId: number,
-    ) =>
+    workflowRunArtifacts: (owner: string, repo: string, runId: number) =>
       request<WorkflowArtifactsResponse>(
-        `/api/github/repos/${encodeURIComponent(owner)}/${encodeURIComponent(repo)}/runs/${runId}/artifacts`,
+        runUrl(owner, repo, runId, "/artifacts"),
       ),
-    
+
+    pipelines: (owner: string, repo: string) =>
+      request<RepositoryWorkflowsResponse>(
+        repositoryUrl(owner, repo, "/pipelines"),
+      ),
+
+    pipelineDetails: (owner: string, repo: string, workflowId: number) =>
+      request<PipelineDetailsResponse>(
+        repositoryUrl(owner, repo, `/pipelines/${workflowId}`),
+      ),
+
+    enablePipeline: (owner: string, repo: string, workflowId: number) =>
+      jsonRequest<PipelineCommandResult>(
+        repositoryUrl(owner, repo, `/pipelines/${workflowId}/enable`),
+        "POST",
+      ),
+
+    disablePipeline: (owner: string, repo: string, workflowId: number) =>
+      jsonRequest<PipelineCommandResult>(
+        repositoryUrl(owner, repo, `/pipelines/${workflowId}/disable`),
+        "POST",
+      ),
+
+    deletePipeline: (owner: string, repo: string, workflowId: number) =>
+      request<PipelineCommandResult>(
+        repositoryUrl(owner, repo, `/pipelines/${workflowId}`),
+        { method: "DELETE" },
+      ),
   },
 };

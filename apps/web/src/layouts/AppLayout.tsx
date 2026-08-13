@@ -70,13 +70,14 @@ export function AppLayout({
             Runs
           </SidebarLink>
 
-          <button
-            disabled
-            className="flex w-full cursor-not-allowed items-center gap-3 rounded-lg px-3 py-2.5 text-sm text-zinc-700"
+          <SidebarLink
+            to="/pipelines"
+            icon={
+              <GitBranch size={18} />
+            }
           >
-            <GitBranch size={18} />
             Pipelines
-          </button>
+          </SidebarLink>
         </nav>
 
         <div className="absolute bottom-0 w-full border-t border-zinc-800 p-4">
