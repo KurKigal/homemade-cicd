@@ -73,6 +73,8 @@ dependencies:
       framework: "Flutter",
       language: "Dart",
       packageManager: null,
+      lockfilePresent: false,
+      availableScripts: [],
 
       platforms: {
         android: true,
@@ -120,7 +122,7 @@ dependencies:
     expect(result.framework).toBeNull();
   });
 
-  it("detects React + Vite and pnpm", async () => {
+  it("detects React + Vite, pnpm and available package scripts", async () => {
     const reader = new FakeRepositoryReader(
       [
         "package.json",
@@ -134,6 +136,12 @@ dependencies:
           },
           devDependencies: {
             vite: "^8.0.0",
+          },
+          scripts: {
+            test: "vitest run",
+            build: "vite build",
+            ignored: false,
+            lint: "eslint .",
           },
         }),
       },
@@ -160,6 +168,16 @@ dependencies:
     expect(result.language).toBe(
       "TypeScript / JavaScript",
     );
+
+    expect(result.lockfilePresent).toBe(
+      true,
+    );
+
+    expect(result.availableScripts).toEqual([
+      "build",
+      "lint",
+      "test",
+    ]);
   });
 
   it("detects Next.js before generic React", async () => {
@@ -196,6 +214,95 @@ dependencies:
       "npm",
     );
   });
+
+  it.each([
+    ["NestJS", "@nestjs/core"],
+    ["Fastify", "fastify"],
+    ["Express", "express"],
+    ["React", "react"],
+  ])(
+    "detects %s from package.json dependencies",
+    async (framework, dependency) => {
+      const reader = new FakeRepositoryReader(
+        ["package.json"],
+        {
+          "package.json": JSON.stringify({
+            dependencies: {
+              [dependency]: "latest",
+            },
+          }),
+        },
+      );
+
+      const result = await detectProject(
+        reader,
+        "example",
+        "node-app",
+      );
+
+      expect(result.framework).toBe(framework);
+    },
+  );
+
+  it.each([
+    ["pnpm", "pnpm-lock.yaml"],
+    ["yarn", "yarn.lock"],
+    ["bun", "bun.lock"],
+    ["bun", "bun.lockb"],
+    ["npm", "package-lock.json"],
+  ] as const)(
+    "detects the %s package manager from %s",
+    async (packageManager, lockfile) => {
+      const reader = new FakeRepositoryReader(
+        ["package.json", lockfile],
+        {
+          "package.json": JSON.stringify({}),
+        },
+      );
+
+      const result = await detectProject(
+        reader,
+        "example",
+        "node-app",
+      );
+
+      expect(result.packageManager).toBe(
+        packageManager,
+      );
+      expect(result.lockfilePresent).toBe(true);
+    },
+  );
+
+  it.each([
+    ["an unreadable package.json", undefined],
+    ["an invalid package.json", "{invalid-json"],
+  ])(
+    "uses safe Node defaults for %s",
+    async (_description, packageJson) => {
+      const files = packageJson === undefined
+        ? {}
+        : { "package.json": packageJson };
+
+      const reader = new FakeRepositoryReader(
+        ["package.json"],
+        files,
+      );
+
+      const result = await detectProject(
+        reader,
+        "example",
+        "node-app",
+      );
+
+      expect(result).toMatchObject({
+        projectType: "node",
+        framework: "Node.js",
+        packageManager: "npm",
+        lockfilePresent: false,
+        availableScripts: [],
+      });
+    },
+  );
 
   it("detects a Python project from pyproject.toml", async () => {
     const reader = new FakeRepositoryReader([
@@ -270,6 +377,8 @@ dependencies:
       framework: null,
       language: null,
       packageManager: null,
+      lockfilePresent: false,
+      availableScripts: [],
 
       platforms: {
         android: false,

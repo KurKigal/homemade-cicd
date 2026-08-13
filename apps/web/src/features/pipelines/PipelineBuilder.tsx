@@ -128,10 +128,13 @@ function PipelineBuilderForm({
 
     try {
       const result =
-        await api.github.previewFlutterPipeline(
+        await api.github.previewPipeline(
           owner,
           repo,
-          config,
+          {
+            projectType: "flutter",
+            config,
+          },
         );
 
       setPreview(
@@ -157,10 +160,13 @@ function PipelineBuilderForm({
 
     try {
       const result =
-        await api.github.applyFlutterPipeline(
+        await api.github.applyPipeline(
           owner,
           repo,
-          config,
+          {
+            projectType: "flutter",
+            config,
+          },
         );
 
       setSuccess(

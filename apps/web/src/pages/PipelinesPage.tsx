@@ -32,6 +32,7 @@ import { queryKeys } from "../lib/query-keys";
 import {
   useGitHubUser,
   useRepositories,
+  useRepositoryInspection,
 } from "../features/repositories/hooks";
 
 import {
@@ -59,6 +60,10 @@ export function PipelinesPage() {
 
   const userQuery = useGitHubUser();
   const repositoriesQuery = useRepositories();
+  const inspectionQuery = useRepositoryInspection(
+    owner,
+    repo,
+  );
 
   const selectedRepository =
     repositoriesQuery.data?.find(
@@ -129,6 +134,7 @@ export function PipelinesPage() {
 
     if (owner && repo) {
       void pipelinesQuery.refetch();
+      void inspectionQuery.refetch();
     }
   }
 
@@ -137,7 +143,8 @@ export function PipelinesPage() {
       title="Pipelines"
       user={userQuery.data}
       isRefreshing={
-        pipelinesQuery.isFetching
+        pipelinesQuery.isFetching ||
+        inspectionQuery.isFetching
       }
       onRefresh={refresh}
     >
@@ -228,6 +235,17 @@ export function PipelinesPage() {
                   }
                   workflowId={
                     selectedWorkflowId
+                  }
+                  projectAnalysis={
+                    inspectionQuery.data?.analysis
+                  }
+                  projectAnalysisLoading={
+                    inspectionQuery.isLoading
+                  }
+                  projectAnalysisError={
+                    inspectionQuery.isError
+                      ? inspectionQuery.error.message
+                      : undefined
                   }
                 />
               ) : (

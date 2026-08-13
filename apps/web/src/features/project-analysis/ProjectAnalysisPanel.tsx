@@ -6,6 +6,10 @@ import {
   PipelineBuilder,
 } from "../pipelines/PipelineBuilder";
 
+import {
+  NodePipelineBuilder,
+} from "../pipelines/NodePipelineBuilder";
+
 import type {
   SelectedRepository,
 } from "../repositories/types";
@@ -99,23 +103,55 @@ export function ProjectAnalysisPanel({
             />
 
             <AnalysisCard
-              label="Android"
+              label="Package manager"
               value={
-                inspection.analysis.platforms
-                  .android
-                  ? "Ready"
-                  : "Not detected"
+                inspection.analysis.packageManager ??
+                "Not detected"
               }
             />
 
-            <AnalysisCard
-              label="iOS"
-              value={
-                inspection.analysis.platforms.ios
-                  ? "Ready"
-                  : "Not detected"
-              }
-            />
+            {inspection.analysis.projectType ===
+              "flutter" && (
+              <>
+                <AnalysisCard
+                  label="Android"
+                  value={
+                    inspection.analysis.platforms
+                      .android
+                      ? "Ready"
+                      : "Not detected"
+                  }
+                />
+
+                <AnalysisCard
+                  label="iOS"
+                  value={
+                    inspection.analysis.platforms.ios
+                      ? "Ready"
+                      : "Not detected"
+                  }
+                />
+              </>
+            )}
+
+            {inspection.analysis.projectType ===
+              "node" && (
+              <>
+                <AnalysisCard
+                  label="Lockfile"
+                  value={
+                    inspection.analysis.lockfilePresent
+                      ? "Detected"
+                      : "Not detected"
+                  }
+                />
+
+                <AnalysisCard
+                  label="Package scripts"
+                  value={`${inspection.analysis.availableScripts.length} detected`}
+                />
+              </>
+            )}
 
             <AnalysisCard
               label="Existing CI/CD"
@@ -152,6 +188,35 @@ export function ProjectAnalysisPanel({
                 )}
               </div>
             </div>
+
+            {inspection.analysis.projectType ===
+              "node" && (
+              <div className="rounded-lg border border-zinc-800 bg-zinc-950 p-4 md:col-span-2 lg:col-span-4">
+                <p className="text-xs text-zinc-500">
+                  Available package scripts
+                </p>
+
+                <div className="mt-2 flex flex-wrap gap-2">
+                  {inspection.analysis.availableScripts
+                    .length > 0 ? (
+                    inspection.analysis.availableScripts.map(
+                      (script) => (
+                        <span
+                          key={script}
+                          className="rounded-md bg-zinc-800 px-2 py-1 text-xs text-zinc-300"
+                        >
+                          {script}
+                        </span>
+                      ),
+                    )
+                  ) : (
+                    <span className="text-sm text-zinc-500">
+                      No package scripts detected.
+                    </span>
+                  )}
+                </div>
+              </div>
+            )}
           </div>
 
           {inspection.analysis.projectType ===
@@ -165,14 +230,36 @@ export function ProjectAnalysisPanel({
             />
           )}
 
+          {inspection.analysis.projectType ===
+            "node" && (
+            <NodePipelineBuilder
+              owner={repository.owner}
+              repo={repository.name}
+              defaultBranch={
+                repository.defaultBranch
+              }
+              packageManager={
+                inspection.analysis.packageManager
+              }
+              availableScripts={
+                inspection.analysis.availableScripts
+              }
+              lockfilePresent={
+                inspection.analysis.lockfilePresent
+              }
+            />
+          )}
+
           {inspection.analysis.projectType !==
-            "flutter" && (
+            "flutter" &&
+            inspection.analysis.projectType !==
+              "node" && (
             <div className="mt-6 rounded-lg border border-zinc-800 bg-zinc-950 p-4">
               <p className="text-sm text-zinc-500">
                 Pipeline Builder is currently
-                available for Flutter projects.
-                Support for this project type will
-                be added later.
+                available for Flutter and Node.js
+                projects. Support for this project
+                type will be added later.
               </p>
             </div>
           )}

@@ -1,19 +1,26 @@
 import { z } from "zod";
 
+import { packageManagerSchema } from "./project.js";
+
 export const HOMEMADE_WORKFLOW_FILE =
   "homemade-ci.yml";
 
 export const HOMEMADE_WORKFLOW_PATH =
   `.github/workflows/${HOMEMADE_WORKFLOW_FILE}`;
 
+export const pipelineTriggerSchema = z.object({
+  push: z.boolean(),
+  pullRequest: z.boolean(),
+  manual: z.boolean(),
+});
+
+export type PipelineTrigger =
+  z.infer<typeof pipelineTriggerSchema>;
+
 export const flutterPipelineSchema = z.object({
   branch: z.string().min(1),
 
-  trigger: z.object({
-    push: z.boolean(),
-    pullRequest: z.boolean(),
-    manual: z.boolean(),
-  }),
+  trigger: pipelineTriggerSchema,
 
   checks: z.object({
     analyze: z.boolean(),
@@ -34,6 +41,40 @@ export const flutterPipelineSchema = z.object({
 
 export type FlutterPipelineConfig =
   z.infer<typeof flutterPipelineSchema>;
+
+export const nodePipelineSchema = z.object({
+  branch: z.string().trim().min(1),
+  nodeVersion: z.string().trim().min(1),
+  packageManager: packageManagerSchema,
+  frozenLockfile: z.boolean(),
+
+  trigger: pipelineTriggerSchema,
+
+  tasks: z.object({
+    lint: z.boolean(),
+    typecheck: z.boolean(),
+    test: z.boolean(),
+    build: z.boolean(),
+  }),
+});
+
+export type NodePipelineConfig =
+  z.infer<typeof nodePipelineSchema>;
+
+export const managedPipelineSchema =
+  z.discriminatedUnion("projectType", [
+    z.object({
+      projectType: z.literal("flutter"),
+      config: flutterPipelineSchema,
+    }),
+    z.object({
+      projectType: z.literal("node"),
+      config: nodePipelineSchema,
+    }),
+  ]);
+
+export type ManagedPipelineConfig =
+  z.infer<typeof managedPipelineSchema>;
 
 export interface PipelinePreview {
   repository: {
@@ -80,7 +121,7 @@ export interface PipelineDetailsResponse {
 
   yaml: string | null;
 
-  config: FlutterPipelineConfig | null;
+  config: ManagedPipelineConfig | null;
 }
 
 export interface PipelineCommandResult {

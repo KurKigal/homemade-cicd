@@ -21,11 +21,22 @@ import {
   PipelineBuilder,
 } from "./PipelineBuilder";
 
+import {
+  NodePipelineBuilder,
+} from "./NodePipelineBuilder";
+
+import type {
+  ProjectAnalysis,
+} from "@homemade-cicd/core";
+
 interface PipelineDetailsPanelProps {
   owner: string;
   repo: string;
   defaultBranch: string;
   workflowId: number;
+  projectAnalysis?: ProjectAnalysis;
+  projectAnalysisLoading?: boolean;
+  projectAnalysisError?: string;
 }
 
 export function PipelineDetailsPanel({
@@ -33,6 +44,9 @@ export function PipelineDetailsPanel({
   repo,
   defaultBranch,
   workflowId,
+  projectAnalysis,
+  projectAnalysisLoading,
+  projectAnalysisError,
 }: PipelineDetailsPanelProps) {
   const queryClient =
     useQueryClient();
@@ -220,7 +234,7 @@ export function PipelineDetailsPanel({
       </section>
 
       {workflow.managedByHomemade &&
-        config && (
+        config?.projectType === "flutter" && (
           <PipelineBuilder
             owner={owner}
             repo={repo}
@@ -228,11 +242,47 @@ export function PipelineDetailsPanel({
               defaultBranch
             }
             initialConfig={
-              config
+              config.config
             }
             mode="edit"
             onApplied={
               refresh
+            }
+          />
+        )}
+
+      {workflow.managedByHomemade &&
+        config?.projectType === "node" && (
+          <NodePipelineBuilder
+            owner={owner}
+            repo={repo}
+            defaultBranch={defaultBranch}
+            packageManager={
+              projectAnalysis?.projectType === "node"
+                ? projectAnalysis.packageManager
+                : config.config.packageManager
+            }
+            availableScripts={
+              projectAnalysis?.projectType === "node"
+                ? projectAnalysis.availableScripts
+                : []
+            }
+            lockfilePresent={
+              projectAnalysis?.projectType === "node"
+                ? projectAnalysis.lockfilePresent
+                : false
+            }
+            initialConfig={config.config}
+            mode="edit"
+            onApplied={refresh}
+            metadataWarning={
+              projectAnalysis?.projectType === "node"
+                ? undefined
+                : projectAnalysisLoading
+                  ? "Repository metadata is still loading. Existing settings are preserved while unavailable additions remain disabled."
+                  : projectAnalysisError
+                    ? `Repository metadata could not be loaded: ${projectAnalysisError} Existing settings remain editable, but unavailable additions are disabled.`
+                    : "This repository is no longer detected as a Node.js project. Existing settings remain editable, but unavailable additions are disabled."
             }
           />
         )}

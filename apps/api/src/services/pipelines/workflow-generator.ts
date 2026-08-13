@@ -1,10 +1,12 @@
-import YAML from "yaml";
-
 import type {
   FlutterPipelineConfig,
 } from "@homemade-cicd/core";
 
-type WorkflowStep = Record<string, unknown>;
+import {
+  createWorkflowTriggers,
+  formatManagedWorkflow,
+  type WorkflowStep,
+} from "./workflow-format.js";
 
 function createFlutterSetupSteps(
   includeJava = false,
@@ -48,23 +50,10 @@ function qualityDependency(enabled: boolean) {
 export function generateFlutterWorkflow(
   config: FlutterPipelineConfig,
 ): string {
-  const triggers: Record<string, unknown> = {};
-
-  if (config.trigger.manual) {
-    triggers.workflow_dispatch = {};
-  }
-
-  if (config.trigger.push) {
-    triggers.push = {
-      branches: [config.branch],
-    };
-  }
-
-  if (config.trigger.pullRequest) {
-    triggers.pull_request = {
-      branches: [config.branch],
-    };
-  }
+  const triggers = createWorkflowTriggers(
+    config.branch,
+    config.trigger,
+  );
 
   const jobs: Record<string, unknown> = {};
 
@@ -176,10 +165,6 @@ export function generateFlutterWorkflow(
     };
   }
 
-  if (Object.keys(triggers).length === 0) {
-    triggers.workflow_dispatch = {};
-  }
-
   if (Object.keys(jobs).length === 0) {
     throw new Error(
       "Pipeline must contain at least one check or build.",
@@ -198,7 +183,9 @@ export function generateFlutterWorkflow(
     jobs,
   };
 
-  return YAML.stringify(workflow, {
-    lineWidth: 0,
-  });
+  return formatManagedWorkflow(
+    "flutter",
+    workflow,
+    config.branch,
+  );
 }
