@@ -50,13 +50,13 @@ export async function pipelineRoutes(app: FastifyInstance) {
       );
 
       if (!params) {
-        return;
+        return reply;
       }
 
       const config = parsePipelineConfig(request.body, reply);
 
       if (!config) {
-        return;
+        return reply;
       }
 
       return {
@@ -77,13 +77,13 @@ export async function pipelineRoutes(app: FastifyInstance) {
       );
 
       if (!params) {
-        return;
+        return reply;
       }
 
       const config = parsePipelineConfig(request.body, reply);
 
       if (!config) {
-        return;
+        return reply;
       }
 
       const result = await saveWorkflow({
@@ -110,7 +110,7 @@ export async function pipelineRoutes(app: FastifyInstance) {
       );
 
       if (!params) {
-        return;
+        return reply;
       }
 
       return listRepositoryPipelines(params.owner, params.repo);
@@ -128,7 +128,7 @@ export async function pipelineRoutes(app: FastifyInstance) {
       );
 
       if (!params) {
-        return;
+        return reply;
       }
 
       return getPipelineDetails(
@@ -150,7 +150,7 @@ export async function pipelineRoutes(app: FastifyInstance) {
       );
 
       if (!params) {
-        return;
+        return reply;
       }
 
       return enablePipeline(params.owner, params.repo, params.workflowId);
@@ -168,7 +168,7 @@ export async function pipelineRoutes(app: FastifyInstance) {
       );
 
       if (!params) {
-        return;
+        return reply;
       }
 
       return disablePipeline(params.owner, params.repo, params.workflowId);
@@ -186,7 +186,7 @@ export async function pipelineRoutes(app: FastifyInstance) {
       );
 
       if (!params) {
-        return;
+        return reply;
       }
 
       return deleteManagedPipeline(

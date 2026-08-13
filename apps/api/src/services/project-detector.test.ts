@@ -281,4 +281,32 @@ dependencies:
       signals: [],
     });
   });
+
+  it("returns independent platform state for separate analyses", async () => {
+    const reader = new FakeRepositoryReader([
+      "README.md",
+    ]);
+
+    const first = await detectProject(
+      reader,
+      "example",
+      "first-project",
+    );
+
+    const second = await detectProject(
+      reader,
+      "example",
+      "second-project",
+    );
+
+    expect(first.platforms).not.toBe(
+      second.platforms,
+    );
+
+    first.platforms.android = true;
+
+    expect(second.platforms.android).toBe(
+      false,
+    );
+  });
 });

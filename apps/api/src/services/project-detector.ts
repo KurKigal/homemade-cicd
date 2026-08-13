@@ -13,11 +13,13 @@ const PYTHON_MARKERS = [
   "setup.py",
 ] as const;
 
-const NO_PLATFORMS = {
-  android: false,
-  ios: false,
-  web: false,
-} as const;
+function createNoPlatforms(): ProjectAnalysis["platforms"] {
+  return {
+    android: false,
+    ios: false,
+    web: false,
+  };
+}
 
 function asRecord(value: unknown): Record<string, unknown> {
   return typeof value === "object" && value !== null && !Array.isArray(value)
@@ -233,7 +235,7 @@ export async function detectProject(
       language: "Python",
       packageManager: null,
 
-      platforms: NO_PLATFORMS,
+      platforms: createNoPlatforms(),
 
       ciConfigured: workflowsExist,
       signals: pythonSignals,
@@ -246,7 +248,7 @@ export async function detectProject(
     language: null,
     packageManager: null,
 
-    platforms: NO_PLATFORMS,
+    platforms: createNoPlatforms(),
 
     ciConfigured: workflowsExist,
     signals: [],

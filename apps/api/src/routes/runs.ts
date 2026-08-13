@@ -37,7 +37,7 @@ export async function runsRoutes(app: FastifyInstance) {
       );
 
       if (!params) {
-        return;
+        return reply;
       }
 
       const query = parseRouteInput(
@@ -48,7 +48,7 @@ export async function runsRoutes(app: FastifyInstance) {
       );
 
       if (!query) {
-        return;
+        return reply;
       }
 
       return listRepositoryRuns(
@@ -70,7 +70,7 @@ export async function runsRoutes(app: FastifyInstance) {
       );
 
       if (!params) {
-        return;
+        return reply;
       }
 
       const run = await getRepositoryRun(
@@ -94,7 +94,7 @@ export async function runsRoutes(app: FastifyInstance) {
       );
 
       if (!params) {
-        return;
+        return reply;
       }
 
       return listRepositoryRunJobs(
@@ -116,7 +116,7 @@ export async function runsRoutes(app: FastifyInstance) {
       );
 
       if (!params) {
-        return;
+        return reply;
       }
 
       const body = parseRouteInput(
@@ -127,7 +127,7 @@ export async function runsRoutes(app: FastifyInstance) {
       );
 
       if (!body) {
-        return;
+        return reply;
       }
 
       return dispatchRepositoryWorkflow(
@@ -149,7 +149,7 @@ export async function runsRoutes(app: FastifyInstance) {
       );
 
       if (!params) {
-        return;
+        return reply;
       }
 
       return rerunRepositoryWorkflow(
@@ -171,7 +171,7 @@ export async function runsRoutes(app: FastifyInstance) {
       );
 
       if (!params) {
-        return;
+        return reply;
       }
 
       return rerunFailedRepositoryJobs(
@@ -193,7 +193,7 @@ export async function runsRoutes(app: FastifyInstance) {
       );
 
       if (!params) {
-        return;
+        return reply;
       }
 
       return cancelRepositoryWorkflow(

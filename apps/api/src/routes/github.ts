@@ -44,7 +44,7 @@ export async function githubRoutes(
       );
 
       if (!params) {
-        return;
+        return reply;
       }
 
       const { owner, repo } = params;

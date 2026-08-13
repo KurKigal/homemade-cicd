@@ -27,7 +27,7 @@ export async function artifactsRoutes(
       );
 
       if (!params) {
-        return;
+        return reply;
       }
 
       return listRunArtifacts(
@@ -49,7 +49,7 @@ export async function artifactsRoutes(
       );
 
       if (!params) {
-        return;
+        return reply;
       }
 
       const downloadUrl =
