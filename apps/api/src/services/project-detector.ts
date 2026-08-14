@@ -2,16 +2,14 @@ import type {
   ProjectAnalysis,
 } from "@homemade-cicd/core";
 
+import {
+  inspectPythonProject,
+  PYTHON_PROJECT_MARKERS,
+  PYTHON_TOOL_MARKERS,
+} from "./python-project-metadata.js";
 import type {
   RepositoryReader,
 } from "./repositories/repository-reader.js";
-
-const PYTHON_MARKERS = [
-  "pyproject.toml",
-  "requirements.txt",
-  "Pipfile",
-  "setup.py",
-] as const;
 
 function createNoPlatforms(): ProjectAnalysis["platforms"] {
   return {
@@ -22,8 +20,10 @@ function createNoPlatforms(): ProjectAnalysis["platforms"] {
 }
 
 function asRecord(value: unknown): Record<string, unknown> {
-  return typeof value === "object" && value !== null && !Array.isArray(value)
-    ? (value as Record<string, unknown>)
+  return typeof value === "object" &&
+    value !== null &&
+    !Array.isArray(value)
+    ? value as Record<string, unknown>
     : {};
 }
 
@@ -49,11 +49,11 @@ function inspectNodePackageJson(
   packageJsonText: string,
 ): NodePackageMetadata {
   try {
-    const packageJson = asRecord(JSON.parse(packageJsonText) as unknown);
-
+    const packageJson = asRecord(
+      JSON.parse(packageJsonText) as unknown,
+    );
     const availableScripts =
       readAvailableScripts(packageJson);
-
     const dependencies = {
       ...asRecord(packageJson.dependencies),
       ...asRecord(packageJson.devDependencies),
@@ -146,51 +146,37 @@ export async function detectProject(
   owner: string,
   repo: string,
 ): Promise<ProjectAnalysis> {
-  const names =
-    await reader.listRootEntryNames(
-      owner,
-      repo,
-    );
-
-  const hasPubspec =
-    names.has("pubspec.yaml");
-
-  const hasPackageJson =
-    names.has("package.json");
-
-  const pythonSignals = PYTHON_MARKERS.filter((file) => names.has(file));
+  const names = await reader.listRootEntryNames(
+    owner,
+    repo,
+  );
+  const hasPubspec = names.has("pubspec.yaml");
+  const hasPackageJson = names.has("package.json");
+  const pythonSignals = PYTHON_PROJECT_MARKERS.filter(
+    (file) => names.has(file),
+  );
   const hasPythonProject = pythonSignals.length > 0;
-
   const android = names.has("android");
   const ios = names.has("ios");
   const web = names.has("web");
+  const workflowsExist = await reader.pathExists(
+    owner,
+    repo,
+    ".github/workflows",
+  );
 
-  const workflowsExist =
-    await reader.pathExists(
+  if (hasPubspec) {
+    const pubspec = await reader.readTextFile(
       owner,
       repo,
-      ".github/workflows",
+      "pubspec.yaml",
     );
-
-  /*
-   * FLUTTER
-   */
-  if (hasPubspec) {
-    const pubspec =
-      await reader.readTextFile(
-        owner,
-        repo,
-        "pubspec.yaml",
-      );
-
     const isFlutter =
       pubspec?.includes("sdk: flutter") ||
       pubspec?.includes("flutter:");
 
     if (isFlutter) {
-      const signals = [
-        "pubspec.yaml",
-      ];
+      const signals = ["pubspec.yaml"];
 
       if (android) {
         signals.push("android/");
@@ -211,68 +197,49 @@ export async function detectProject(
         packageManager: null,
         lockfilePresent: false,
         availableScripts: [],
-
+        python: null,
         platforms: {
           android,
           ios,
           web,
         },
-
         ciConfigured: workflowsExist,
         signals,
       };
     }
   }
 
-  /*
-   * NODE
-   */
   if (hasPackageJson) {
-    const packageJson =
-      await reader.readTextFile(
-        owner,
-        repo,
-        "package.json",
-      );
-
+    const packageJson = await reader.readTextFile(
+      owner,
+      repo,
+      "package.json",
+    );
     const detectedPackageManager =
       detectPackageManager(names);
-
-    const packageMetadata =
-      packageJson
-        ? inspectNodePackageJson(packageJson)
-        : {
-            framework: "Node.js",
-            availableScripts: [],
-          };
+    const packageMetadata = packageJson
+      ? inspectNodePackageJson(packageJson)
+      : {
+          framework: "Node.js",
+          availableScripts: [],
+        };
 
     return {
       projectType: "node",
-
-      framework:
-        packageMetadata.framework,
-
-      language:
-        "TypeScript / JavaScript",
-
+      framework: packageMetadata.framework,
+      language: "TypeScript / JavaScript",
       packageManager: detectedPackageManager ?? "npm",
-
-      lockfilePresent:
-        detectedPackageManager !== null,
-
+      lockfilePresent: detectedPackageManager !== null,
       availableScripts: packageMetadata.availableScripts,
-
+      python: null,
       platforms: {
         android: false,
         ios: false,
         web: true,
       },
-
       ciConfigured: workflowsExist,
-
       signals: [
         "package.json",
-
         ...(detectedPackageManager
           ? [`${detectedPackageManager} lockfile`]
           : []),
@@ -280,10 +247,14 @@ export async function detectProject(
     };
   }
 
-  /*
-   * PYTHON
-   */
   if (hasPythonProject) {
+    const python = await inspectPythonProject(
+      reader,
+      owner,
+      repo,
+      names,
+    );
+
     return {
       projectType: "python",
       framework: "Python",
@@ -291,11 +262,13 @@ export async function detectProject(
       packageManager: null,
       lockfilePresent: false,
       availableScripts: [],
-
+      python,
       platforms: createNoPlatforms(),
-
       ciConfigured: workflowsExist,
-      signals: pythonSignals,
+      signals: [
+        ...pythonSignals,
+        ...PYTHON_TOOL_MARKERS.filter((file) => names.has(file)),
+      ],
     };
   }
 
@@ -306,9 +279,8 @@ export async function detectProject(
     packageManager: null,
     lockfilePresent: false,
     availableScripts: [],
-
+    python: null,
     platforms: createNoPlatforms(),
-
     ciConfigured: workflowsExist,
     signals: [],
   };

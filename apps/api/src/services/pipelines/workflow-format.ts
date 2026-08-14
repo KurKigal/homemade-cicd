@@ -18,7 +18,10 @@ const TRIGGER_BRANCH_MARKER =
   "# homemade-trigger-branch:";
 
 const MANAGED_WORKFLOW_HEADER =
-  /^# Managed by Homemade CI\/CD\r?\n# homemade-project-type: (flutter|node)[ \t]*(?:\r?\n|$)/u;
+  /^# Managed by Homemade CI\/CD\r?\n# homemade-project-type: (flutter|node|python)[ \t]*(?:\r?\n|$)/u;
+
+const EXPLICIT_PROJECT_TYPE_HEADER =
+  /^# Managed by Homemade CI\/CD\r?\n# homemade-project-type:[^\r\n]*(?:\r?\n|$)/u;
 
 export function createWorkflowTriggers(
   branch: string,
@@ -104,10 +107,17 @@ export function readManagedProjectType(
 
   if (
     projectType === "flutter" ||
-    projectType === "node"
+    projectType === "node" ||
+    projectType === "python"
   ) {
     return projectType;
   }
 
   return null;
+}
+
+export function hasExplicitProjectTypeMarker(
+  yaml: string,
+): boolean {
+  return EXPLICIT_PROJECT_TYPE_HEADER.test(yaml);
 }

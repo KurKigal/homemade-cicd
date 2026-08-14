@@ -3,11 +3,15 @@ import type {
 } from "@homemade-cicd/core";
 
 import {
+  hasExplicitProjectTypeMarker,
   readManagedProjectType,
 } from "./workflow-format.js";
 import {
   parseNodeWorkflow,
 } from "./node-workflow-parser.js";
+import {
+  parsePythonWorkflow,
+} from "./python-workflow-parser.js";
 import {
   parseFlutterWorkflow,
 } from "./workflow-parser.js";
@@ -51,9 +55,20 @@ export function parseManagedWorkflow(
     };
   }
 
+  if (projectType === "python") {
+    return {
+      projectType,
+      config: parsePythonWorkflow(
+        yaml,
+        fallbackBranch,
+      ),
+    };
+  }
+
   if (
     projectType === "flutter" ||
-    isLegacyFlutterWorkflow(yaml)
+    (!hasExplicitProjectTypeMarker(yaml) &&
+      isLegacyFlutterWorkflow(yaml))
   ) {
     return {
       projectType: "flutter",

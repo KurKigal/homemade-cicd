@@ -6,6 +6,9 @@ import {
   generateNodeWorkflow,
 } from "./node-workflow-generator.js";
 import {
+  generatePythonWorkflow,
+} from "./python-workflow-generator.js";
+import {
   generateFlutterWorkflow,
 } from "./workflow-generator.js";
 
@@ -20,6 +23,11 @@ export function generateManagedWorkflow(
 
     case "node":
       return generateNodeWorkflow(
+        definition.config,
+      );
+
+    case "python":
+      return generatePythonWorkflow(
         definition.config,
       );
   }
