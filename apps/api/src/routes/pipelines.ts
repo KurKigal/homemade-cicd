@@ -1,8 +1,7 @@
-import type { FastifyInstance, FastifyReply } from "fastify";
+import type { FastifyInstance } from "fastify";
 
 import {
-  flutterPipelineSchema,
-  type FlutterPipelineConfig,
+  managedPipelineSchema,
 } from "@homemade-cicd/core";
 
 import {
@@ -13,30 +12,13 @@ import {
   listRepositoryPipelines,
 } from "../services/pipelines/pipeline-management-service.js";
 import { saveWorkflow } from "../services/pipelines/pipeline-service.js";
-import { generateFlutterWorkflow } from "../services/pipelines/workflow-generator.js";
+import { generateManagedWorkflow } from "../services/pipelines/managed-workflow-generator.js";
 
 import {
   parseRouteInput,
   repositoryParamsSchema,
   workflowParamsSchema,
 } from "./validation.js";
-
-function parsePipelineConfig(
-  input: unknown,
-  reply: FastifyReply,
-): FlutterPipelineConfig | undefined {
-  const result = flutterPipelineSchema.safeParse(input);
-
-  if (result.success) {
-    return result.data;
-  }
-
-  void reply.status(400).send({
-    error: "Invalid pipeline configuration.",
-    issues: result.error.issues,
-  });
-  return undefined;
-}
 
 export async function pipelineRoutes(app: FastifyInstance) {
   app.post(
@@ -53,15 +35,20 @@ export async function pipelineRoutes(app: FastifyInstance) {
         return reply;
       }
 
-      const config = parsePipelineConfig(request.body, reply);
+      const definition = parseRouteInput(
+        managedPipelineSchema,
+        request.body,
+        reply,
+        "Invalid pipeline configuration.",
+      );
 
-      if (!config) {
+      if (!definition) {
         return reply;
       }
 
       return {
         repository: params,
-        yaml: generateFlutterWorkflow(config),
+        yaml: generateManagedWorkflow(definition),
       };
     },
   );
@@ -80,16 +67,21 @@ export async function pipelineRoutes(app: FastifyInstance) {
         return reply;
       }
 
-      const config = parsePipelineConfig(request.body, reply);
+      const definition = parseRouteInput(
+        managedPipelineSchema,
+        request.body,
+        reply,
+        "Invalid pipeline configuration.",
+      );
 
-      if (!config) {
+      if (!definition) {
         return reply;
       }
 
       const result = await saveWorkflow({
         owner: params.owner,
         repo: params.repo,
-        yaml: generateFlutterWorkflow(config),
+        yaml: generateManagedWorkflow(definition),
       });
 
       return {

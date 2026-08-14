@@ -28,6 +28,10 @@ export const projectAnalysisSchema = z.object({
 
   packageManager: packageManagerSchema.nullable(),
 
+  lockfilePresent: z.boolean(),
+
+  availableScripts: z.array(z.string()),
+
   platforms: z.object({
     android: z.boolean(),
     ios: z.boolean(),

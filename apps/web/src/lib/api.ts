@@ -1,6 +1,6 @@
 import type {
-  FlutterPipelineConfig,
   GitHubUser,
+  ManagedPipelineConfig,
   PipelineApplyResult,
   PipelineCommandResult,
   PipelineDetailsResponse,
@@ -63,10 +63,10 @@ export const api = {
     inspectRepository: (owner: string, repo: string) =>
       request<RepositoryInspection>(repositoryUrl(owner, repo, "/inspect")),
 
-    previewFlutterPipeline: (
+    previewPipeline: (
       owner: string,
       repo: string,
-      config: FlutterPipelineConfig,
+      config: ManagedPipelineConfig,
     ) =>
       jsonRequest<PipelinePreview>(
         repositoryUrl(owner, repo, "/pipeline/preview"),
@@ -74,10 +74,10 @@ export const api = {
         config,
       ),
 
-    applyFlutterPipeline: (
+    applyPipeline: (
       owner: string,
       repo: string,
-      config: FlutterPipelineConfig,
+      config: ManagedPipelineConfig,
     ) =>
       jsonRequest<PipelineApplyResult>(
         repositoryUrl(owner, repo, "/pipeline"),

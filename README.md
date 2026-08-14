@@ -86,6 +86,7 @@ Uzun vadede sistemin SaaS veya çok kullanıcılı bir ürüne dönüştürüleb
 - [Project Detector](#project-detector)
 - [Pipeline Sistemi](#pipeline-sistemi)
 - [Flutter Workflow Generator](#flutter-workflow-generator)
+- [Node.js Workflow Generator](#nodejs-workflow-generator)
 - [Android Pipeline](#android-pipeline)
 - [iOS Pipeline](#ios-pipeline)
 - [Workflow'un GitHub'a Yazılması](#workflowun-githuba-yazılması)
@@ -281,7 +282,7 @@ dönüşümü yapılabilir.
 
 # Mevcut Özellikler
 
-Şu anda oluşturulan ilk çalışan vertical slice aşağıdaki akışı desteklemektedir:
+Uygulama şu anda Flutter ve Node.js repository'leri için uçtan uca pipeline oluşturma, mevcut pipeline'ları yönetme ve GitHub Actions çalışmalarını izleme akışını desteklemektedir:
 
 ```text
 GitHub bağlantısı
@@ -292,9 +293,9 @@ Repository seçimi
       ↓
 Repository analizi
       ↓
-Project type detection
+Project type ve package manager detection
       ↓
-Flutter pipeline builder
+Flutter / Node.js pipeline builder
       ↓
 Workflow preview
       ↓
@@ -336,6 +337,15 @@ Algılanabilen platformlar:
 - iOS
 - Web
 
+### Node.js
+
+- `package.json` script'lerini algılama
+- pnpm, npm, yarn ve Bun lockfile algılama
+- lockfile bulunmadığında güvenli npm varsayılanı
+- seçilebilir Node.js sürümü
+- frozen lockfile kurulumu
+- lint, typecheck, test ve build görevleri
+
 ### CI/CD
 
 Flutter için:
@@ -345,6 +355,12 @@ Flutter için:
 - Android APK
 - Android AAB
 - unsigned iOS build
+
+Node.js için:
+
+- package manager'a uygun dependency kurulumu
+- `lint`, `typecheck`, `test` ve `build` script'lerini ayrı ayrı çalıştırma
+- pnpm, npm, yarn ve Bun desteği
 
 ### Trigger
 
@@ -357,6 +373,11 @@ Flutter için:
 - YAML preview
 - yeni workflow oluşturma
 - mevcut workflow'u güncelleme
+- repository workflow'larını listeleme
+- workflow detayını ve YAML içeriğini görüntüleme
+- Homemade tarafından yönetilen pipeline'ı etkinleştirme, devre dışı bırakma ve silme
+- workflow run listesi, job detayları, manual dispatch, re-run ve cancel
+- run artifact'lerini listeleme ve indirme
 
 Workflow dosyası:
 
@@ -562,22 +583,32 @@ apps/web/src/
 ├── features/
 │   │
 │   ├── pipelines/
-│   │   └── PipelineBuilder.tsx
+│   │   ├── PipelineBuilder.tsx
+│   │   ├── NodePipelineBuilder.tsx
+│   │   └── PipelineWorkflowCard.tsx
 │   │
 │   ├── project-analysis/
 │   │   └── ProjectAnalysisPanel.tsx
 │   │
-│   └── repositories/
-│       ├── RepositoryCard.tsx
-│       ├── RepositoryList.tsx
-│       ├── RepositorySearch.tsx
-│       └── types.ts
+│   ├── repositories/
+│   │   ├── RepositoryCard.tsx
+│   │   ├── RepositoryList.tsx
+│   │   ├── RepositorySearch.tsx
+│   │   └── types.ts
+│   │
+│   └── runs/
+│       ├── JobsSection.tsx
+│       ├── RunActions.tsx
+│       └── WorkflowRunCard.tsx
 │
 ├── layouts/
 │   └── AppLayout.tsx
 │
 ├── pages/
-│   └── ProjectsPage.tsx
+│   ├── PipelinesPage.tsx
+│   ├── ProjectsPage.tsx
+│   ├── RunDetailPage.tsx
+│   └── RunsPage.tsx
 │
 ├── lib/
 │   └── api.ts
@@ -609,10 +640,16 @@ apps/api/src/
 │   └── github.ts
 │
 ├── routes/
+│   ├── artifacts.ts
 │   ├── github.ts
-│   └── pipelines.ts
+│   ├── pipelines.ts
+│   ├── runs.ts
+│   └── validation.ts
 │
 ├── services/
+│   │
+│   ├── artifacts/
+│   │   └── artifacts-service.ts
 │   │
 │   ├── github/
 │   │   └── github-service.ts
@@ -620,18 +657,23 @@ apps/api/src/
 │   ├── repositories/
 │   │   └── repository-reader.ts
 │   │
-│  -service.ts
-│   │
-│   ├── repositories/
-│   │   └── repository-reader.ts
-│   │
 │   ├── pipelines/
+│   │   ├── managed-workflow-generator.ts
+│   │   ├── managed-workflow-parser.ts
+│   │   ├── node-workflow-generator.ts
+│   │   ├── node-workflow-parser.ts
+│   │   ├── pipeline-management-service.ts
 │   │   ├── pipeline-service.ts
-│   │   └── workflow-generator.ts
+│   │   ├── workflow-generator.ts
+│   │   └── workflow-parser.ts
+│   │
+│   ├── runs/
+│   │   └── runs-service.ts
 │   │
 │   ├── project-analysis-service.ts
 │   └── project-detector.ts
 │
+├── app.ts
 └── server.ts
 ```
 
@@ -666,6 +708,8 @@ Frontend:
 import type {
   Repository,
   FlutterPipelineConfig,
+  NodePipelineConfig,
+  ManagedPipelineConfig,
 } from "@homemade-cicd/core";
 ```
 
@@ -673,7 +717,7 @@ Backend:
 
 ```ts
 import {
-  flutterPipelineSchema,
+  managedPipelineSchema,
 } from "@homemade-cicd/core";
 ```
 
@@ -707,19 +751,15 @@ Refactor sonrası:
 
 ```text
 App
- │
- ▼
-ProjectsPage
- │
- ├── AppLayout
- │
- ├── RepositorySearch
- │
- ├── RepositoryList
- │   └── RepositoryCard
- │
- └── ProjectAnalysisPanel
-     └── PipelineBuilder
+ ├── ProjectsPage
+ │   ├── RepositoryList
+ │   └── ProjectAnalysisPanel
+ │       ├── PipelineBuilder
+ │       └── NodePipelineBuilder
+ ├── RunsPage
+ │   └── RunDetailPage
+ └── PipelinesPage
+     └── PipelineDetailsPanel
 ```
 
 ---
@@ -730,13 +770,7 @@ Artık yalnızca application entry component seviyesindedir.
 
 Mantıksal olarak:
 
-```tsx
-function App() {
-  return <ProjectsPage />;
-}
-```
-
-şeklindedir.
+`App.tsx`, React Router üzerinden `/projects`, `/runs` ve `/pipelines` sayfalarını eşler; feature veya GitHub business logic'i içermez.
 
 Application-specific büyük logic burada tutulmaz.
 
@@ -828,6 +862,8 @@ Android support
 iOS support
 Existing CI/CD
 Detection signals
+Package manager / lockfile
+Available package scripts
 ```
 
 Örneğin:
@@ -846,7 +882,7 @@ ios/
 web/
 ```
 
-Project type Flutter ise Pipeline Builder gösterilir.
+Project type Flutter veya Node.js ise ilgili Pipeline Builder gösterilir.
 
 ---
 
@@ -856,7 +892,7 @@ Project type Flutter ise Pipeline Builder gösterilir.
 features/pipelines/PipelineBuilder.tsx
 ```
 
-Flutter CI/CD pipeline konfigürasyon arayüzüdür.
+Flutter CI/CD pipeline konfigürasyon arayüzüdür. Node.js projeleri için `NodePipelineBuilder.tsx` aynı preview/apply akışını package manager ve script seçenekleriyle sunar.
 
 Şu an kullanıcı aşağıdaki seçenekleri değiştirebilir:
 
@@ -899,6 +935,8 @@ Preview
 Create Pipeline
 ```
 
+Node.js builder ayrıca Node sürümü, pnpm/npm/yarn/Bun, frozen lockfile ve repository'de bulunan `lint`, `typecheck`, `test`, `build` script'lerini yapılandırır.
+
 ---
 
 # Backend Mimarisi
@@ -939,17 +977,16 @@ GitHub
 
 ---
 
-# `server.ts`
+# `app.ts` ve `server.ts`
 
-Fastify application bootstrap noktasıdır.
+`buildApp()` test edilebilir Fastify uygulamasını kurar; `server.ts` yalnızca bu uygulamayı oluşturup HTTP listener'ı başlatır.
 
 Temel görevleri:
 
 - Fastify instance oluşturmak
 - CORS register etmek
 - health endpoint tanımlamak
-- GitHub routes register etmek
-- Pipeline routes register etmek
+- GitHub, runs, artifacts ve pipeline route'larını register etmek
 - HTTP server'ı başlatmak
 
 Development portu:
@@ -1272,6 +1309,8 @@ package-lock.json
     → npm
 ```
 
+Lockfile yoksa Node.js pipeline'ı npm ile başlatılır ve dependency kurulumu `npm install` kullanır. Detector ayrıca `package.json` içindeki string script adlarını sıralı olarak `availableScripts` alanında döndürür. Bu bilgi builder'ın yalnızca repository'de gerçekten bulunan görevleri önermesini sağlar.
+
 ---
 
 # Python Detection
@@ -1313,7 +1352,7 @@ Bu şu anda yalnızca:
 
 sorusunu cevaplamaktadır.
 
-Workflow'un Homemade CI/CD tarafından mı oluşturulduğu henüz ayrı şekilde analiz edilmemektedir.
+Project Detector'ın `ciConfigured` alanı yalnızca workflow dizininin varlığını belirtir. Pipeline yönetimi ise sabit dosya path'i ve YAML içindeki Homemade/project-type marker'ları üzerinden yönetilen workflow'u ayrıca ayırt eder.
 
 ---
 
@@ -1396,9 +1435,13 @@ RepositoryInspection
 
 ```text
 FlutterPipelineConfig
+NodePipelineConfig
+ManagedPipelineConfig
 PipelinePreview
 PipelineApplyResult
 flutterPipelineSchema
+nodePipelineSchema
+managedPipelineSchema
 ```
 
 ---
@@ -1410,7 +1453,7 @@ Bazı domain modelleri yalnızca TypeScript interface olarak değil, Zod schema 
 Örneğin:
 
 ```text
-flutterPipelineSchema
+managedPipelineSchema
 ```
 
 aynı anda iki amaç taşır.
@@ -1427,7 +1470,7 @@ type FlutterPipelineConfig =
 Backend'e gönderilen JSON:
 
 ```text
-gerçekten geçerli bir FlutterPipelineConfig mi?
+gerçekten geçerli ve proje türüyle eşleşen bir Flutter veya Node.js pipeline config'i mi?
 ```
 
 kontrol edilir.
@@ -1520,20 +1563,22 @@ Pipeline sisteminde UI doğrudan YAML üretmez.
 }
 ```
 
-Bu yapı:
+Flutter'a özgü alanlar `FlutterPipelineConfig`, Node.js'e özgü alanlar `NodePipelineConfig` olarak tanımlanır. API'ye gönderilen ortak discriminated union ise:
 
 ```text
-FlutterPipelineConfig
+ManagedPipelineConfig
+├── { projectType: "flutter", config: FlutterPipelineConfig }
+└── { projectType: "node", config: NodePipelineConfig }
 ```
-
-olarak tanımlanır.
 
 Sonra:
 
 ```text
-FlutterPipelineConfig
+ManagedPipelineConfig
         ↓
-Workflow Generator
+Managed Workflow Dispatcher
+        ↓
+Flutter / Node.js Workflow Generator
         ↓
 YAML
 ```
@@ -1605,6 +1650,23 @@ FlutterPipelineConfig
 ```
 
 nesnesini GitHub Actions workflow'una dönüştürmektir.
+
+Flutter ve Node.js generator'ları ürettikleri YAML'ın başına yönetim, proje türü ve trigger branch metadata marker'ları ekler. `generateManagedWorkflow` discriminated union içindeki `projectType` değerine göre doğru generator'ı çağırır; `parseManagedWorkflow` aynı marker üzerinden doğru parser'a yönlendirir. Branch metadata'sı manual-only workflow'ların da edit ekranında aynı branch ile açılmasını sağlar. Marker içermeyen eski Flutter workflow'ları, Flutter action imzası algılanarak geriye uyumlu biçimde parse edilir.
+
+---
+
+# Node.js Workflow Generator
+
+Node.js pipeline'ları `ubuntu-latest` üzerinde checkout ve `actions/setup-node@v4` adımlarını çalıştırır. pnpm için `pnpm/action-setup@v4`, Yarn için sabitlenmiş bir Corepack sürümü, Bun için `oven-sh/setup-bun@v2` hazırlanır. Dependency kurulumu package manager ve `frozenLockfile` seçimine göre yapılır:
+
+```text
+pnpm  → pnpm install [--frozen-lockfile]
+npm   → npm ci | npm install
+yarn  → yarn install [--frozen-lockfile]
+bun   → bun install [--frozen-lockfile]
+```
+
+Seçilen ve repository'de mevcut olan görevler sırasıyla `<manager> run lint`, `typecheck`, `test` ve `build` komutlarına dönüşür. Push, pull request ve manual trigger'lar Flutter ile aynı ortak contract'ı kullanır; hiçbir trigger seçilmezse manual dispatch eklenir.
 
 ---
 
@@ -2022,6 +2084,8 @@ Repository'nin proje yapısını analiz eder.
     "framework": "Flutter",
     "language": "Dart",
     "packageManager": null,
+    "lockfilePresent": false,
+    "availableScripts": [],
     "platforms": {
       "android": true,
       "ios": true,
@@ -2050,24 +2114,52 @@ Request body:
 
 ```json
 {
-  "branch": "main",
-  "trigger": {
-    "push": true,
-    "pullRequest": true,
-    "manual": true
-  },
-  "checks": {
-    "analyze": true,
-    "test": true
-  },
-  "android": {
-    "enabled": true,
-    "apk": true,
-    "aab": true
-  },
-  "ios": {
-    "enabled": true,
-    "unsignedBuild": true
+  "projectType": "flutter",
+  "config": {
+    "branch": "main",
+    "trigger": {
+      "push": true,
+      "pullRequest": true,
+      "manual": true
+    },
+    "checks": {
+      "analyze": true,
+      "test": true
+    },
+    "android": {
+      "enabled": true,
+      "apk": true,
+      "aab": true
+    },
+    "ios": {
+      "enabled": true,
+      "unsignedBuild": true
+    }
+  }
+}
+```
+
+Node.js için aynı endpoint'e aşağıdaki discriminated payload gönderilir:
+
+```json
+{
+  "projectType": "node",
+  "config": {
+    "branch": "main",
+    "nodeVersion": "24",
+    "packageManager": "pnpm",
+    "frozenLockfile": true,
+    "trigger": {
+      "push": true,
+      "pullRequest": true,
+      "manual": true
+    },
+    "tasks": {
+      "lint": true,
+      "typecheck": true,
+      "test": true,
+      "build": true
+    }
   }
 }
 ```
@@ -2082,7 +2174,7 @@ Repository üzerinde değişiklik yapmadan YAML üretir.
 PUT /api/github/repos/:owner/:repo/pipeline
 ```
 
-Aynı FlutterPipelineConfig body kullanılır.
+Aynı `ManagedPipelineConfig` body kullanılır.
 
 Workflow'u:
 
@@ -2091,6 +2183,31 @@ Workflow'u:
 ```
 
 dosyasına yazar.
+
+---
+
+# Pipeline ve Run Yönetimi
+
+```http
+GET    /api/github/repos/:owner/:repo/pipelines
+GET    /api/github/repos/:owner/:repo/pipelines/:workflowId
+POST   /api/github/repos/:owner/:repo/pipelines/:workflowId/enable
+POST   /api/github/repos/:owner/:repo/pipelines/:workflowId/disable
+DELETE /api/github/repos/:owner/:repo/pipelines/:workflowId
+
+GET  /api/github/repos/:owner/:repo/runs
+GET  /api/github/repos/:owner/:repo/runs/:runId
+GET  /api/github/repos/:owner/:repo/runs/:runId/jobs
+POST /api/github/repos/:owner/:repo/runs/dispatch
+POST /api/github/repos/:owner/:repo/runs/:runId/rerun
+POST /api/github/repos/:owner/:repo/runs/:runId/rerun-failed
+POST /api/github/repos/:owner/:repo/runs/:runId/cancel
+
+GET /api/github/repos/:owner/:repo/runs/:runId/artifacts
+GET /api/github/repos/:owner/:repo/artifacts/:artifactId/download
+```
+
+Pipeline detay endpoint'i Homemade marker'lı Flutter ve Node.js workflow'larını kendi config türlerine parse eder. Enable/disable GitHub Actions workflow state'ini değiştirir; delete yalnızca Homemade tarafından yönetilen sabit workflow path'i için kullanılabilir.
 
 ---
 
@@ -3005,7 +3122,7 @@ Bu mimari önemli bir tasarım kararıdır.
 
 # Test Stratejisi
 
-Şu ana kadar sistem smoke test ile doğrulanmıştır.
+Vitest ile project detector, Flutter/Node.js workflow generator ve parser'ları, managed dispatcher ve route validation için otomatik regresyon testleri çalıştırılır. Kök `pnpm check` komutu ayrıca tüm workspace'lerde typecheck, frontend lint ve production build gerçekleştirir.
 
 Kontrol edilen temel akış:
 
@@ -3020,20 +3137,15 @@ iOS detection           ✓
 Pipeline preview        ✓
 Pipeline creation       ✓
 Pipeline update         ✓
-```
-
-Sonraki refactor milestone'unda automated tests eklenecektir.
-
-Öncelikli test hedefleri:
-
-```text
-Project Detector
-Workflow Generator
+Node detection          ✓
+Node workflow           ✓
+Managed round-trip      ✓
+Route validation        ✓
 ```
 
 ---
 
-# Planned Unit Tests
+# Unit Test Kapsamı
 
 ## Flutter Detection
 
@@ -3102,7 +3214,7 @@ macos-latest
 
 bulunmamalıdır.
 
-Bu testler Node/Python pipeline desteği eklendiğinde regression riskini azaltacaktır.
+Node.js tarafında tüm package manager kurulumları, frozen/non-frozen davranışı, görev ve trigger kombinasyonları; Flutter ve Node.js tarafında generate/parse round-trip davranışı test edilir. Eski marker'sız Flutter YAML desteği de geriye uyumluluk testiyle korunur.
 
 ---
 
@@ -3114,7 +3226,6 @@ Henüz desteklenmeyen başlıca özellikler:
 
 ### CI/CD
 
-- Node pipeline generation
 - Python pipeline generation
 - signed iOS IPA
 - TestFlight deployment
@@ -3130,14 +3241,8 @@ Henüz desteklenmeyen başlıca özellikler:
 
 ### GitHub Actions Monitoring
 
-- workflow run listesi
-- live status
-- job listesi
-- logs
-- artifact download UI
-- re-run
-- cancel
-- manual dispatch UI
+- tam workflow log içeriğini panel içinde görüntüleme
+- pagination ve geçmiş run'ların tamamını yükleme
 
 ### Platform
 
@@ -3152,6 +3257,19 @@ Henüz desteklenmeyen başlıca özellikler:
 ---
 
 # Roadmap
+
+Güncel milestone durumu:
+
+| Milestone | Kapsam | Durum |
+| --- | --- | --- |
+| M0 | Bootstrap | DONE |
+| M1 | Flutter Pipeline | DONE |
+| M1.5 | Architecture Refactor | DONE |
+| M2 | Runs Dashboard | DONE |
+| M3 | Artifacts | DONE |
+| M4 | Pipeline Management | DONE |
+| M5 | Node.js Pipelines | DONE |
+| M6 | Python | NEXT |
 
 ## Milestone 0 — Bootstrap
 
@@ -3205,12 +3323,12 @@ Thin routes
 Durum:
 
 ```text
-IN PROGRESS / NEAR COMPLETE
+DONE
 ```
 
 ---
 
-# Milestone 2 — Automated Tests
+# Automated Test Foundation
 
 Plan:
 
@@ -3224,9 +3342,11 @@ Workflow Generator tests
 Regression safety net
 ```
 
+Durum: `DONE`
+
 ---
 
-# Milestone 3 — Runs Dashboard
+# Milestone 2 — Runs Dashboard
 
 Hedef:
 
@@ -3237,6 +3357,8 @@ Workflow Runs API
       ↓
 Homemade CI/CD
 ```
+
+Durum: `DONE`
 
 UI:
 
@@ -3253,21 +3375,7 @@ Build #42
 
 ---
 
-# Milestone 4 — Pipeline Controls
-
-Hedef:
-
-```text
-Run Now
-Re-run
-Cancel
-```
-
-Workflow dispatch ve run operations GitHub API üzerinden yönetilecektir.
-
----
-
-# Milestone 5 — Artifacts
+# Milestone 3 — Artifacts
 
 Panel üzerinden:
 
@@ -3278,6 +3386,8 @@ iOS artifact
 ```
 
 görüntüleme.
+
+Durum: `DONE`
 
 Hedef UI:
 
@@ -3298,7 +3408,26 @@ iOS Build
 
 ---
 
-# Milestone 6 — Node Pipeline
+# Milestone 4 — Pipeline Management
+
+Hedef:
+
+```text
+Run Now
+Re-run
+Cancel
+Enable / Disable
+Edit / Delete
+Workflow reverse parsing
+```
+
+Workflow dispatch ve run operations GitHub API üzerinden yönetilir. Repository workflow'ları ayrıca listelenebilir, incelenebilir, etkinleştirilebilir, devre dışı bırakılabilir ve Homemade yönetimindeki workflow silinebilir.
+
+Durum: `DONE`
+
+---
+
+# Milestone 5 — Node.js Pipelines
 
 Project Detector tarafından algılanan:
 
@@ -3320,13 +3449,18 @@ projeleri için pipeline preset'leri.
 Node Setup
 npm/pnpm install
 lint
+typecheck
 test
 build
 ```
 
+pnpm, npm, yarn ve Bun; frozen lockfile kurulumu, seçilebilir Node sürümü, repository script discovery ve managed YAML round-trip desteği tamamlandı.
+
+Durum: `DONE`
+
 ---
 
-# Milestone 7 — Python Pipeline
+# Milestone 6 — Python
 
 Destek planı:
 
@@ -3339,9 +3473,11 @@ mypy
 build
 ```
 
+Durum: `NEXT`
+
 ---
 
-# Milestone 8 — Signed iOS
+# Gelecek — Signed iOS
 
 Hedef:
 
@@ -3357,7 +3493,7 @@ UI üzerinden signing configuration yönetimi planlanmaktadır.
 
 ---
 
-# Milestone 9 — Releases
+# Gelecek — Releases
 
 Homemade CI/CD panelinden:
 
@@ -3373,7 +3509,7 @@ ile GitHub Release oluşturma.
 
 ---
 
-# Milestone 10 — Store Deployment
+# Gelecek — Store Deployment
 
 Uzun vadede:
 
@@ -3613,7 +3749,7 @@ detaylarını kendisi yönetir.
 
 # Current Status
 
-Proje şu anda ilk gerçek end-to-end CI/CD akışını başarıyla tamamlamıştır.
+Proje Flutter ve Node.js için gerçek end-to-end CI/CD akışlarını tamamlamıştır. Milestone 0–5 kapsamı çalışır durumdadır; sıradaki hedef Python pipeline desteğidir.
 
 Çalışan akış:
 
@@ -3624,9 +3760,9 @@ Homemade CI/CD Dashboard
         ↓
 Repository Inspection
         ↓
-Flutter Detection
+Flutter / Node.js Detection
         ↓
-Pipeline Builder
+Project-specific Pipeline Builder
         ↓
 Preview
         ↓
@@ -3639,25 +3775,15 @@ GitHub Contents API
 GitHub Actions
 ```
 
-Test amacıyla oluşturulan bir Flutter repository üzerinde:
-
-```text
-Preview
-```
-
-ve:
-
-```text
-Create Pipeline
-```
-
-işlemleri başarıyla denenmiş ve repository içerisinde:
+Flutter ve Node.js config'leri ortak managed dispatcher üzerinden doğrulanır, uygun YAML generator'a gönderilir ve repository içerisinde:
 
 ```text
 .github/workflows/homemade-ci.yml
 ```
 
-dosyasının otomatik olarak oluşturulduğu doğrulanmıştır.
+dosyası otomatik olarak oluşturulur veya güncellenir.
+
+Panel ayrıca GitHub Actions run ve job durumlarını izler; workflow dispatch, re-run, failed-job re-run ve cancel komutlarını çalıştırır; artifact'leri listeler ve indirir. Pipelines ekranı repository workflow'larını listeler, Homemade tarafından yönetilen YAML'ı tekrar config'e parse eder ve enable/disable/delete işlemlerini sunar.
 
 Bu noktadan itibaren Homemade CI/CD yalnızca bir UI prototipi değildir.
 

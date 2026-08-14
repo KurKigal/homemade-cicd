@@ -27,11 +27,32 @@ function asRecord(value: unknown): Record<string, unknown> {
     : {};
 }
 
-function detectNodeFramework(
+interface NodePackageMetadata {
+  framework: string;
+  availableScripts: string[];
+}
+
+function readAvailableScripts(
+  packageJson: Record<string, unknown>,
+): string[] {
+  const scripts = asRecord(packageJson.scripts);
+
+  return Object.entries(scripts)
+    .filter((entry): entry is [string, string] =>
+      typeof entry[1] === "string",
+    )
+    .map(([name]) => name)
+    .sort();
+}
+
+function inspectNodePackageJson(
   packageJsonText: string,
-): string {
+): NodePackageMetadata {
   try {
     const packageJson = asRecord(JSON.parse(packageJsonText) as unknown);
+
+    const availableScripts =
+      readAvailableScripts(packageJson);
 
     const dependencies = {
       ...asRecord(packageJson.dependencies),
@@ -39,35 +60,59 @@ function detectNodeFramework(
     };
 
     if ("next" in dependencies) {
-      return "Next.js";
+      return {
+        framework: "Next.js",
+        availableScripts,
+      };
     }
 
     if ("@nestjs/core" in dependencies) {
-      return "NestJS";
+      return {
+        framework: "NestJS",
+        availableScripts,
+      };
     }
 
     if ("fastify" in dependencies) {
-      return "Fastify";
+      return {
+        framework: "Fastify",
+        availableScripts,
+      };
     }
 
     if ("express" in dependencies) {
-      return "Express";
+      return {
+        framework: "Express",
+        availableScripts,
+      };
     }
 
     if (
       "react" in dependencies &&
       "vite" in dependencies
     ) {
-      return "React + Vite";
+      return {
+        framework: "React + Vite",
+        availableScripts,
+      };
     }
 
     if ("react" in dependencies) {
-      return "React";
+      return {
+        framework: "React",
+        availableScripts,
+      };
     }
 
-    return "Node.js";
+    return {
+      framework: "Node.js",
+      availableScripts,
+    };
   } catch {
-    return "Node.js";
+    return {
+      framework: "Node.js",
+      availableScripts: [],
+    };
   }
 }
 
@@ -164,6 +209,8 @@ export async function detectProject(
         framework: "Flutter",
         language: "Dart",
         packageManager: null,
+        lockfilePresent: false,
+        availableScripts: [],
 
         platforms: {
           android,
@@ -188,22 +235,32 @@ export async function detectProject(
         "package.json",
       );
 
-    const packageManager =
+    const detectedPackageManager =
       detectPackageManager(names);
+
+    const packageMetadata =
+      packageJson
+        ? inspectNodePackageJson(packageJson)
+        : {
+            framework: "Node.js",
+            availableScripts: [],
+          };
 
     return {
       projectType: "node",
 
-      framework: packageJson
-        ? detectNodeFramework(
-            packageJson,
-          )
-        : "Node.js",
+      framework:
+        packageMetadata.framework,
 
       language:
         "TypeScript / JavaScript",
 
-      packageManager,
+      packageManager: detectedPackageManager ?? "npm",
+
+      lockfilePresent:
+        detectedPackageManager !== null,
+
+      availableScripts: packageMetadata.availableScripts,
 
       platforms: {
         android: false,
@@ -216,10 +273,8 @@ export async function detectProject(
       signals: [
         "package.json",
 
-        ...(packageManager
-          ? [
-              `${packageManager} lockfile`,
-            ]
+        ...(detectedPackageManager
+          ? [`${detectedPackageManager} lockfile`]
           : []),
       ],
     };
@@ -234,6 +289,8 @@ export async function detectProject(
       framework: "Python",
       language: "Python",
       packageManager: null,
+      lockfilePresent: false,
+      availableScripts: [],
 
       platforms: createNoPlatforms(),
 
@@ -247,6 +304,8 @@ export async function detectProject(
     framework: null,
     language: null,
     packageManager: null,
+    lockfilePresent: false,
+    availableScripts: [],
 
     platforms: createNoPlatforms(),
 

@@ -12,8 +12,8 @@ import {
 } from "../../adapters/github/github-adapter.js";
 
 import {
-  parseFlutterWorkflow,
-} from "./workflow-parser.js";
+  parseManagedWorkflow,
+} from "./managed-workflow-parser.js";
 
 export function listRepositoryPipelines(
   owner: string,
@@ -62,11 +62,17 @@ export async function getPipelineDetails(
     };
   }
 
-  const config =
-    parseFlutterWorkflow(
+  let config: PipelineDetailsResponse["config"] = null;
+
+  try {
+    config = parseManagedWorkflow(
       yaml,
       defaultBranch,
     );
+  } catch {
+    // Keep malformed or unsupported workflow YAML viewable without
+    // presenting an editor that could overwrite an unknown definition.
+  }
 
   return {
     workflow,

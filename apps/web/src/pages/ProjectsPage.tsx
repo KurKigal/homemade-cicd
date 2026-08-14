@@ -3,9 +3,6 @@ import {
   useState,
 } from "react";
 
-import { api } from "../lib/api";
-import { queryKeys } from "../lib/query-keys";
-
 import {
   AppLayout,
 } from "../layouts/AppLayout";
@@ -29,9 +26,8 @@ import type {
 import {
   useGitHubUser,
   useRepositories,
+  useRepositoryInspection,
 } from "../features/repositories/hooks";
-
-import { useQuery } from "@tanstack/react-query";
 
 export function ProjectsPage() {
   const [search, setSearch] = useState("");
@@ -46,27 +42,10 @@ export function ProjectsPage() {
   const userQuery = useGitHubUser();
   const repositoriesQuery = useRepositories();
 
-  const inspectionQuery = useQuery({
-    queryKey: queryKeys.inspection(
-      selectedRepository?.owner,
-      selectedRepository?.name,
-    ),
-
-    queryFn: () => {
-      if (!selectedRepository) {
-        throw new Error(
-          "No repository selected.",
-        );
-      }
-
-      return api.github.inspectRepository(
-        selectedRepository.owner,
-        selectedRepository.name,
-      );
-    },
-
-    enabled: selectedRepository !== null,
-  });
+  const inspectionQuery = useRepositoryInspection(
+    selectedRepository?.owner,
+    selectedRepository?.name,
+  );
 
   const repositories = useMemo(() => {
     const repos =
