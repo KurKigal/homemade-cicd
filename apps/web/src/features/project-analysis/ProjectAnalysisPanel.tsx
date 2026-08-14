@@ -1,4 +1,5 @@
 import type {
+  PythonDependencySource,
   RepositoryInspection,
 } from "@homemade-cicd/core";
 
@@ -9,6 +10,10 @@ import {
 import {
   NodePipelineBuilder,
 } from "../pipelines/NodePipelineBuilder";
+
+import {
+  PythonPipelineBuilder,
+} from "../pipelines/PythonPipelineBuilder";
 
 import type {
   SelectedRepository,
@@ -105,7 +110,10 @@ export function ProjectAnalysisPanel({
             <AnalysisCard
               label="Package manager"
               value={
-                inspection.analysis.packageManager ??
+                inspection.analysis.projectType === "python"
+                  ? inspection.analysis.python?.packageManager ??
+                    "Not detected"
+                  : inspection.analysis.packageManager ??
                 "Not detected"
               }
             />
@@ -149,6 +157,37 @@ export function ProjectAnalysisPanel({
                 <AnalysisCard
                   label="Package scripts"
                   value={`${inspection.analysis.availableScripts.length} detected`}
+                />
+              </>
+            )}
+
+            {inspection.analysis.projectType ===
+              "python" &&
+              inspection.analysis.python && (
+              <>
+                <AnalysisCard
+                  label="Lockfile"
+                  value={
+                    inspection.analysis.python.lockfilePresent
+                      ? "Detected"
+                      : "Not detected"
+                  }
+                />
+
+                <AnalysisCard
+                  label="Dependency source"
+                  value={
+                    pythonDependencySourceLabel(
+                      inspection.analysis.python.dependencySource,
+                    )
+                  }
+                />
+
+                <AnalysisCard
+                  label="Python tasks"
+                  value={`${Object.values(
+                    inspection.analysis.python.availableTasks,
+                  ).filter(Boolean).length} detected`}
                 />
               </>
             )}
@@ -217,6 +256,39 @@ export function ProjectAnalysisPanel({
                 </div>
               </div>
             )}
+
+            {inspection.analysis.projectType ===
+              "python" &&
+              inspection.analysis.python && (
+              <div className="rounded-lg border border-zinc-800 bg-zinc-950 p-4 md:col-span-2 lg:col-span-4">
+                <p className="text-xs text-zinc-500">
+                  Available Python tasks
+                </p>
+
+                <div className="mt-2 flex flex-wrap gap-2">
+                  {Object.entries(
+                    inspection.analysis.python.availableTasks,
+                  ).some(([, available]) => available) ? (
+                    Object.entries(
+                      inspection.analysis.python.availableTasks,
+                    )
+                      .filter(([, available]) => available)
+                      .map(([task]) => (
+                        <span
+                          key={task}
+                          className="rounded-md bg-zinc-800 px-2 py-1 text-xs text-zinc-300"
+                        >
+                          {task}
+                        </span>
+                      ))
+                  ) : (
+                    <span className="text-sm text-zinc-500">
+                      No supported Python tasks detected.
+                    </span>
+                  )}
+                </div>
+              </div>
+            )}
           </div>
 
           {inspection.analysis.projectType ===
@@ -250,14 +322,46 @@ export function ProjectAnalysisPanel({
             />
           )}
 
+          {inspection.analysis.projectType ===
+            "python" &&
+            inspection.analysis.python && (
+            <PythonPipelineBuilder
+              owner={repository.owner}
+              repo={repository.name}
+              defaultBranch={repository.defaultBranch}
+              packageManager={
+                inspection.analysis.python.packageManager
+              }
+              dependencySource={
+                inspection.analysis.python.dependencySource
+              }
+              availableTasks={
+                inspection.analysis.python.availableTasks
+              }
+              lockfilePresent={
+                inspection.analysis.python.lockfilePresent
+              }
+            />
+          )}
+
+          {inspection.analysis.projectType ===
+            "python" &&
+            !inspection.analysis.python && (
+            <div className="mt-6 rounded-lg border border-amber-900/60 bg-amber-950/20 p-4 text-sm text-amber-300">
+              Python metadata could not be determined for this repository.
+            </div>
+          )}
+
           {inspection.analysis.projectType !==
             "flutter" &&
             inspection.analysis.projectType !==
-              "node" && (
+              "node" &&
+            inspection.analysis.projectType !==
+              "python" && (
             <div className="mt-6 rounded-lg border border-zinc-800 bg-zinc-950 p-4">
               <p className="text-sm text-zinc-500">
                 Pipeline Builder is currently
-                available for Flutter and Node.js
+                available for Flutter, Node.js and Python
                 projects. Support for this project
                 type will be added later.
               </p>
@@ -267,6 +371,27 @@ export function ProjectAnalysisPanel({
       )}
     </section>
   );
+}
+
+function pythonDependencySourceLabel(
+  source: PythonDependencySource,
+): string {
+  switch (source) {
+    case "requirements":
+      return "requirements.txt";
+
+    case "requirements-dev":
+      return "requirements-dev.txt";
+
+    case "requirements_dev":
+      return "requirements_dev.txt";
+
+    case "project":
+      return "pyproject.toml / setup.py";
+
+    case "pipfile":
+      return "Pipfile";
+  }
 }
 
 function AnalysisCard({

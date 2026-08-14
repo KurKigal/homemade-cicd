@@ -1,6 +1,11 @@
 import { z } from "zod";
 
-import { packageManagerSchema } from "./project.js";
+import {
+  packageManagerSchema,
+  pythonDependencySourceSchema,
+  pythonPackageManagerSchema,
+  pythonTasksSchema,
+} from "./project.js";
 
 export const HOMEMADE_WORKFLOW_FILE =
   "homemade-ci.yml";
@@ -61,6 +66,52 @@ export const nodePipelineSchema = z.object({
 export type NodePipelineConfig =
   z.infer<typeof nodePipelineSchema>;
 
+export const pythonPipelineSchema = z.object({
+  branch: z.string().trim().min(1),
+  pythonVersion: z.string().trim().min(1),
+  packageManager: pythonPackageManagerSchema,
+  dependencySource: pythonDependencySourceSchema,
+  frozenLockfile: z.boolean(),
+
+  trigger: pipelineTriggerSchema,
+
+  tasks: pythonTasksSchema,
+}).superRefine((config, context) => {
+  const compatibleSource =
+    config.packageManager === "pip"
+      ? config.dependencySource === "requirements" ||
+        config.dependencySource === "requirements-dev" ||
+        config.dependencySource === "requirements_dev" ||
+        config.dependencySource === "project"
+      : config.packageManager === "pipenv"
+        ? config.dependencySource === "pipfile"
+        : config.dependencySource === "project";
+
+  if (!compatibleSource) {
+    context.addIssue({
+      code: "custom",
+      path: ["dependencySource"],
+      message:
+        "Dependency source is not compatible with the Python package manager.",
+    });
+  }
+
+  if (
+    config.packageManager === "pip" &&
+    config.frozenLockfile
+  ) {
+    context.addIssue({
+      code: "custom",
+      path: ["frozenLockfile"],
+      message:
+        "pip dependency files are not treated as managed lockfiles.",
+    });
+  }
+});
+
+export type PythonPipelineConfig =
+  z.infer<typeof pythonPipelineSchema>;
+
 export const managedPipelineSchema =
   z.discriminatedUnion("projectType", [
     z.object({
@@ -70,6 +121,10 @@ export const managedPipelineSchema =
     z.object({
       projectType: z.literal("node"),
       config: nodePipelineSchema,
+    }),
+    z.object({
+      projectType: z.literal("python"),
+      config: pythonPipelineSchema,
     }),
   ]);
 

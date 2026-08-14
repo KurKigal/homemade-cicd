@@ -75,6 +75,7 @@ dependencies:
       packageManager: null,
       lockfilePresent: false,
       availableScripts: [],
+      python: null,
 
       platforms: {
         android: true,
@@ -304,12 +305,21 @@ dependencies:
     },
   );
 
-  it("detects a Python project from pyproject.toml", async () => {
-    const reader = new FakeRepositoryReader([
-      "pyproject.toml",
-      "src",
-      "README.md",
-    ]);
+  it("detects a generic pyproject.toml as a pip project", async () => {
+    const reader = new FakeRepositoryReader(
+      [
+        "pyproject.toml",
+        "src",
+        "README.md",
+      ],
+      {
+        "pyproject.toml": `
+[project]
+name = "example"
+dependencies = []
+`,
+      },
+    );
 
     const result = await detectProject(
       reader,
@@ -322,11 +332,369 @@ dependencies:
       framework: "Python",
       language: "Python",
       packageManager: null,
+      python: {
+        packageManager: "pip",
+        dependencySource: "project",
+        lockfilePresent: false,
+        availableTasks: {
+          ruff: false,
+          pytest: false,
+          mypy: false,
+          build: false,
+        },
+      },
     });
 
     expect(result.signals).toContain(
       "pyproject.toml",
     );
+  });
+
+  it.each([
+    {
+      description: "requirements.txt",
+      rootEntries: ["requirements.txt"],
+      files: {
+        "requirements.txt": "ruff==0.12.0\npytest-cov==6.0.0",
+      },
+      packageManager: "pip",
+      dependencySource: "requirements",
+      lockfilePresent: false,
+    },
+    {
+      description: "requirements-dev.txt",
+      rootEntries: ["requirements-dev.txt"],
+      files: {
+        "requirements-dev.txt": "pytest>=8\n",
+      },
+      packageManager: "pip",
+      dependencySource: "requirements-dev",
+      lockfilePresent: false,
+    },
+    {
+      description: "requirements_dev.txt",
+      rootEntries: ["requirements_dev.txt"],
+      files: {
+        "requirements_dev.txt": "mypy>=1.16\n",
+      },
+      packageManager: "pip",
+      dependencySource: "requirements_dev",
+      lockfilePresent: false,
+    },
+    {
+      description: "uv.lock",
+      rootEntries: ["pyproject.toml", "uv.lock"],
+      files: {
+        "pyproject.toml": "[project]\nname = \"uv-app\"",
+      },
+      packageManager: "uv",
+      dependencySource: "project",
+      lockfilePresent: true,
+    },
+    {
+      description: "poetry.lock",
+      rootEntries: ["pyproject.toml", "poetry.lock"],
+      files: {
+        "pyproject.toml": "[tool.poetry]\nname = \"poetry-app\"",
+      },
+      packageManager: "poetry",
+      dependencySource: "project",
+      lockfilePresent: true,
+    },
+    {
+      description: "Pipfile",
+      rootEntries: ["Pipfile"],
+      files: {
+        Pipfile: "[packages]\nrequests = \"*\"",
+      },
+      packageManager: "pipenv",
+      dependencySource: "pipfile",
+      lockfilePresent: false,
+    },
+    {
+      description: "Pipfile.lock",
+      rootEntries: ["Pipfile.lock"],
+      files: {},
+      packageManager: "pipenv",
+      dependencySource: "pipfile",
+      lockfilePresent: true,
+    },
+  ] as const)(
+    "detects Python package metadata from $description",
+    async ({
+      rootEntries,
+      files,
+      packageManager,
+      dependencySource,
+      lockfilePresent,
+    }) => {
+      const result = await detectProject(
+        new FakeRepositoryReader(
+          [...rootEntries],
+          files,
+        ),
+        "example",
+        "python-app",
+      );
+
+      expect(result.projectType).toBe("python");
+      expect(result.python).toMatchObject({
+        packageManager,
+        dependencySource,
+        lockfilePresent,
+      });
+      expect(result.lockfilePresent).toBe(false);
+    },
+  );
+
+  it("discovers Python tasks from exact pyproject metadata", async () => {
+    const result = await detectProject(
+      new FakeRepositoryReader(
+        ["pyproject.toml"],
+        {
+          "pyproject.toml": `
+[build-system]
+requires = ["setuptools>=75"]
+
+[project]
+name = "quality-app"
+dependencies = [
+  "ruff>=0.12",
+  "pytest-cov>=6",
+]
+
+[project.optional-dependencies]
+test = ["pytest>=8", "mypy==1.16"]
+`,
+        },
+      ),
+      "example",
+      "quality-app",
+    );
+
+    expect(result.python?.availableTasks).toEqual({
+      ruff: true,
+      pytest: true,
+      mypy: true,
+      build: true,
+    });
+  });
+
+  it("discovers Python tasks from root tool markers and setup.py", async () => {
+    const result = await detectProject(
+      new FakeRepositoryReader([
+        "setup.py",
+        "ruff.toml",
+        "pytest.ini",
+        "mypy.ini",
+      ]),
+      "example",
+      "configured-app",
+    );
+
+    expect(result.python).toMatchObject({
+      packageManager: "pip",
+      dependencySource: "project",
+      availableTasks: {
+        ruff: true,
+        pytest: true,
+        mypy: true,
+        build: true,
+      },
+    });
+  });
+
+  it("detects Poetry without a lockfile from an exact TOML section", async () => {
+    const result = await detectProject(
+      new FakeRepositoryReader(
+        ["pyproject.toml"],
+        {
+          "pyproject.toml": `
+[tool.poetry]
+name = "poetry-app"
+
+[tool.poetry.group.dev.dependencies]
+pytest = "^8.0"
+`,
+        },
+      ),
+      "example",
+      "poetry-app",
+    );
+
+    expect(result.python).toMatchObject({
+      packageManager: "poetry",
+      dependencySource: "project",
+      lockfilePresent: false,
+      availableTasks: {
+        pytest: true,
+      },
+    });
+  });
+
+  it("detects uv without a lockfile from an exact TOML table", async () => {
+    const result = await detectProject(
+      new FakeRepositoryReader(
+        ["pyproject.toml"],
+        {
+          "pyproject.toml": "[tool.uv]\ndefault-groups = [\"dev\"]",
+        },
+      ),
+      "example",
+      "uv-app",
+    );
+
+    expect(result.python).toMatchObject({
+      packageManager: "uv",
+      dependencySource: "project",
+      lockfilePresent: false,
+    });
+  });
+
+  it("uses deterministic Python package manager precedence", async () => {
+    const result = await detectProject(
+      new FakeRepositoryReader(
+        [
+          "pyproject.toml",
+          "uv.lock",
+          "poetry.lock",
+          "Pipfile",
+          "Pipfile.lock",
+        ],
+        {
+          "pyproject.toml": "[tool.poetry]\nname = \"mixed\"",
+          Pipfile: "[packages]",
+        },
+      ),
+      "example",
+      "mixed-python-app",
+    );
+
+    expect(result.python).toMatchObject({
+      packageManager: "uv",
+      dependencySource: "project",
+      lockfilePresent: true,
+    });
+  });
+
+  it("falls back safely when pyproject.toml cannot be parsed", async () => {
+    const result = await detectProject(
+      new FakeRepositoryReader(
+        ["pyproject.toml"],
+        {
+          "pyproject.toml": "[tool.poetry\ninvalid = [",
+        },
+      ),
+      "example",
+      "broken-python-app",
+    );
+
+    expect(result.python).toEqual({
+      packageManager: "pip",
+      dependencySource: "project",
+      lockfilePresent: false,
+      availableTasks: {
+        ruff: false,
+        pytest: false,
+        mypy: false,
+        build: false,
+      },
+    });
+  });
+
+  it("does not discover tools from similar dependency names or TOML strings", async () => {
+    const result = await detectProject(
+      new FakeRepositoryReader(
+        ["pyproject.toml"],
+        {
+          "pyproject.toml": `
+[project]
+name = "safe-app"
+description = """
+[tool.poetry]
+"""
+dependencies = ["pytest-cov", "ruff-lsp", "mypy-extensions"]
+`,
+        },
+      ),
+      "example",
+      "safe-app",
+    );
+
+    expect(result.python).toEqual({
+      packageManager: "pip",
+      dependencySource: "project",
+      lockfilePresent: false,
+      availableTasks: {
+        ruff: false,
+        pytest: false,
+        mypy: false,
+        build: false,
+      },
+    });
+  });
+
+  it("does not treat scalar TOML keys as tool configuration tables", async () => {
+    const result = await detectProject(
+      new FakeRepositoryReader(
+        ["pyproject.toml"],
+        {
+          "pyproject.toml": `
+build-system = "documentation label"
+
+[tool]
+poetry = "documentation"
+uv = false
+ruff = false
+mypy = "configuration example"
+pytest = { ini_options = "not a table" }
+`,
+        },
+      ),
+      "example",
+      "scalar-values",
+    );
+
+    expect(result.python).toEqual({
+      packageManager: "pip",
+      dependencySource: "project",
+      lockfilePresent: false,
+      availableTasks: {
+        ruff: false,
+        pytest: false,
+        mypy: false,
+        build: false,
+      },
+    });
+  });
+
+  it("keeps Flutter then Node precedence over Python markers", async () => {
+    const flutter = await detectProject(
+      new FakeRepositoryReader(
+        ["pubspec.yaml", "package.json", "pyproject.toml"],
+        {
+          "pubspec.yaml": "dependencies:\n  flutter:\n    sdk: flutter",
+          "package.json": "{}",
+          "pyproject.toml": "[project]",
+        },
+      ),
+      "example",
+      "flutter-monorepo",
+    );
+    const node = await detectProject(
+      new FakeRepositoryReader(
+        ["package.json", "pyproject.toml"],
+        {
+          "package.json": "{}",
+          "pyproject.toml": "[project]",
+        },
+      ),
+      "example",
+      "node-monorepo",
+    );
+
+    expect(flutter.projectType).toBe("flutter");
+    expect(node.projectType).toBe("node");
   });
 
   it("detects existing GitHub Actions workflows", async () => {
@@ -379,6 +747,7 @@ dependencies:
       packageManager: null,
       lockfilePresent: false,
       availableScripts: [],
+      python: null,
 
       platforms: {
         android: false,

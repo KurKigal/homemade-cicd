@@ -72,10 +72,30 @@ const nodeConfig = {
   },
 };
 
+const pythonConfig = {
+  branch: "main",
+  pythonVersion: "3.12",
+  packageManager: "uv",
+  dependencySource: "project",
+  frozenLockfile: true,
+  trigger: {
+    push: true,
+    pullRequest: true,
+    manual: true,
+  },
+  tasks: {
+    ruff: true,
+    pytest: true,
+    mypy: false,
+    build: true,
+  },
+};
+
 describe("pipeline routes", () => {
   it.each([
     ["flutter", flutterConfig],
     ["node", nodeConfig],
+    ["python", pythonConfig],
   ] as const)(
     "previews a valid %s managed pipeline",
     async (projectType, config) => {
@@ -151,6 +171,48 @@ describe("pipeline routes", () => {
     }
   });
 
+  it("applies a valid Python managed pipeline", async () => {
+    const mockedSaveWorkflow = vi.mocked(saveWorkflow);
+    mockedSaveWorkflow.mockResolvedValueOnce({
+      path: ".github/workflows/homemade-ci.yml",
+      commitSha: "python-commit-sha",
+      commitUrl: undefined,
+      created: false,
+    });
+
+    const app = Fastify();
+    await app.register(pipelineRoutes);
+
+    try {
+      const response = await app.inject({
+        method: "PUT",
+        url: "/github/repos/example/project/pipeline",
+        payload: {
+          projectType: "python",
+          config: pythonConfig,
+        },
+      });
+
+      expect(response.statusCode).toBe(200);
+      expect(response.json()).toMatchObject({
+        success: true,
+        workflow: {
+          path: ".github/workflows/homemade-ci.yml",
+          created: false,
+        },
+      });
+      expect(mockedSaveWorkflow).toHaveBeenCalledWith({
+        owner: "example",
+        repo: "project",
+        yaml: expect.stringContaining(
+          "# homemade-project-type: python",
+        ),
+      });
+    } finally {
+      await app.close();
+    }
+  });
+
   it.each([
     {
       caseName: "Flutter discriminator with Node.js config",
@@ -169,7 +231,7 @@ describe("pipeline routes", () => {
     {
       caseName: "unsupported project type",
       payload: {
-        projectType: "python",
+        projectType: "ruby",
         config: nodeConfig,
       },
     },
@@ -190,6 +252,74 @@ describe("pipeline routes", () => {
         config: {
           ...nodeConfig,
           packageManager: "composer",
+        },
+      },
+    },
+    {
+      caseName: "blank Python version",
+      payload: {
+        projectType: "python",
+        config: {
+          ...pythonConfig,
+          pythonVersion: " ",
+        },
+      },
+    },
+    {
+      caseName: "unsupported Python package manager",
+      payload: {
+        projectType: "python",
+        config: {
+          ...pythonConfig,
+          packageManager: "conda",
+        },
+      },
+    },
+    {
+      caseName: "invalid Python task structure",
+      payload: {
+        projectType: "python",
+        config: {
+          ...pythonConfig,
+          tasks: {
+            pytest: true,
+          },
+        },
+      },
+    },
+    {
+      caseName: "missing Python branch",
+      payload: {
+        projectType: "python",
+        config: {
+          pythonVersion: pythonConfig.pythonVersion,
+          packageManager: pythonConfig.packageManager,
+          dependencySource: pythonConfig.dependencySource,
+          frozenLockfile: pythonConfig.frozenLockfile,
+          trigger: pythonConfig.trigger,
+          tasks: pythonConfig.tasks,
+        },
+      },
+    },
+    {
+      caseName: "incompatible Python dependency source",
+      payload: {
+        projectType: "python",
+        config: {
+          ...pythonConfig,
+          dependencySource: "pipfile",
+        },
+      },
+    },
+    {
+      caseName: "pip with managed frozen lockfile semantics",
+      payload: {
+        projectType: "python",
+        config: {
+          ...pythonConfig,
+          packageManager: "pip",
+          dependencySource: "requirements",
+          frozenLockfile: true,
         },
       },
     },

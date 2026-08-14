@@ -8,6 +8,7 @@ import type {
   FlutterPipelineConfig,
   ManagedPipelineConfig,
   NodePipelineConfig,
+  PythonPipelineConfig,
 } from "@homemade-cicd/core";
 
 import {
@@ -60,6 +61,25 @@ const nodeConfig: NodePipelineConfig = {
   },
 };
 
+const pythonConfig: PythonPipelineConfig = {
+  branch: "release/python",
+  pythonVersion: "3.12",
+  packageManager: "poetry",
+  dependencySource: "project",
+  frozenLockfile: true,
+  trigger: {
+    push: true,
+    pullRequest: false,
+    manual: true,
+  },
+  tasks: {
+    ruff: true,
+    pytest: true,
+    mypy: false,
+    build: true,
+  },
+};
+
 describe("managed workflow dispatch", () => {
   it.each([
     {
@@ -69,6 +89,10 @@ describe("managed workflow dispatch", () => {
     {
       projectType: "node",
       config: nodeConfig,
+    },
+    {
+      projectType: "python",
+      config: pythonConfig,
     },
   ] satisfies ManagedPipelineConfig[])(
     "round-trips a $projectType pipeline through the managed dispatcher",
@@ -115,6 +139,17 @@ describe("managed workflow dispatch", () => {
         ].join("\n"),
         "main",
       ),
+    ).toBeNull();
+  });
+
+  it("does not treat an explicit unknown managed type as legacy Flutter", () => {
+    const yaml = generateFlutterWorkflow(flutterConfig).replace(
+      "# homemade-project-type: flutter",
+      "# homemade-project-type: ruby",
+    );
+
+    expect(
+      parseManagedWorkflow(yaml, "main"),
     ).toBeNull();
   });
 });

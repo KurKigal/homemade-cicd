@@ -25,6 +25,10 @@ import {
   NodePipelineBuilder,
 } from "./NodePipelineBuilder";
 
+import {
+  PythonPipelineBuilder,
+} from "./PythonPipelineBuilder";
+
 import type {
   ProjectAnalysis,
 } from "@homemade-cicd/core";
@@ -283,6 +287,57 @@ export function PipelineDetailsPanel({
                   : projectAnalysisError
                     ? `Repository metadata could not be loaded: ${projectAnalysisError} Existing settings remain editable, but unavailable additions are disabled.`
                     : "This repository is no longer detected as a Node.js project. Existing settings remain editable, but unavailable additions are disabled."
+            }
+          />
+        )}
+
+      {workflow.managedByHomemade &&
+        config?.projectType === "python" && (
+          <PythonPipelineBuilder
+            owner={owner}
+            repo={repo}
+            defaultBranch={defaultBranch}
+            packageManager={
+              projectAnalysis?.projectType === "python" &&
+              projectAnalysis.python
+                ? projectAnalysis.python.packageManager
+                : config.config.packageManager
+            }
+            dependencySource={
+              projectAnalysis?.projectType === "python" &&
+              projectAnalysis.python
+                ? projectAnalysis.python.dependencySource
+                : config.config.dependencySource
+            }
+            availableTasks={
+              projectAnalysis?.projectType === "python" &&
+              projectAnalysis.python
+                ? projectAnalysis.python.availableTasks
+                : {
+                    ruff: false,
+                    pytest: false,
+                    mypy: false,
+                    build: false,
+                  }
+            }
+            lockfilePresent={
+              projectAnalysis?.projectType === "python" &&
+              projectAnalysis.python
+                ? projectAnalysis.python.lockfilePresent
+                : false
+            }
+            initialConfig={config.config}
+            mode="edit"
+            onApplied={refresh}
+            metadataWarning={
+              projectAnalysis?.projectType === "python" &&
+              projectAnalysis.python
+                ? undefined
+                : projectAnalysisLoading
+                  ? "Repository metadata is still loading. Existing settings are preserved while unavailable additions remain disabled."
+                  : projectAnalysisError
+                    ? `Repository metadata could not be loaded: ${projectAnalysisError} Existing settings remain editable, but unavailable additions are disabled.`
+                    : "This repository is no longer detected as a Python project. Existing settings remain editable, but unavailable additions are disabled."
             }
           />
         )}
