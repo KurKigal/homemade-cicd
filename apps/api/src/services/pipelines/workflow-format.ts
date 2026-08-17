@@ -1,8 +1,14 @@
 import YAML from "yaml";
+import { z } from "zod";
 
 import type {
+  FlutterPipelineConfig,
   ManagedPipelineConfig,
   PipelineTrigger,
+} from "@homemade-cicd/core";
+import {
+  androidSigningConfigSchema,
+  iosSignedIpaConfigSchema,
 } from "@homemade-cicd/core";
 
 export type WorkflowStep =
@@ -16,6 +22,18 @@ const PROJECT_TYPE_MARKER =
 
 const TRIGGER_BRANCH_MARKER =
   "# homemade-trigger-branch:";
+
+const FLUTTER_SIGNING_MARKER =
+  "# homemade-flutter-signing:";
+
+const flutterSigningMetadataSchema = z.object({
+  android:
+    androidSigningConfigSchema.optional(),
+  ios: iosSignedIpaConfigSchema.optional(),
+}).strict();
+
+export type FlutterSigningMetadata =
+  z.infer<typeof flutterSigningMetadataSchema>;
 
 const MANAGED_WORKFLOW_HEADER =
   /^# Managed by Homemade CI\/CD\r?\n# homemade-project-type: (flutter|node|python)[ \t]*(?:\r?\n|$)/u;
@@ -56,15 +74,66 @@ export function formatManagedWorkflow(
   projectType: ManagedPipelineConfig["projectType"],
   workflow: Record<string, unknown>,
   triggerBranch: string,
+  additionalMarkers: readonly string[] = [],
 ): string {
   return [
     MANAGED_WORKFLOW_MARKER,
     `${PROJECT_TYPE_MARKER} ${projectType}`,
     `${TRIGGER_BRANCH_MARKER} ${JSON.stringify(triggerBranch)}`,
+    ...additionalMarkers,
     YAML.stringify(workflow, {
       lineWidth: 0,
     }),
   ].join("\n");
+}
+
+export function createFlutterSigningMarker(
+  config: FlutterPipelineConfig,
+): string | null {
+  const metadata: FlutterSigningMetadata = {
+    ...(config.android.signing === undefined
+      ? {}
+      : { android: config.android.signing }),
+    ...(config.ios.signedIpa === undefined
+      ? {}
+      : { ios: config.ios.signedIpa }),
+  };
+
+  if (Object.keys(metadata).length === 0) {
+    return null;
+  }
+
+  return `${FLUTTER_SIGNING_MARKER} ${JSON.stringify(metadata)}`;
+}
+
+export function readFlutterSigningMetadata(
+  yaml: string,
+): FlutterSigningMetadata | null {
+  if (readManagedProjectType(yaml) !== "flutter") {
+    return null;
+  }
+
+  const marker = yaml.split(/\r?\n/u)[3];
+
+  if (
+    !marker?.startsWith(
+      `${FLUTTER_SIGNING_MARKER} `,
+    )
+  ) {
+    return null;
+  }
+
+  try {
+    return flutterSigningMetadataSchema.parse(
+      JSON.parse(
+        marker.slice(
+          FLUTTER_SIGNING_MARKER.length + 1,
+        ),
+      ) as unknown,
+    );
+  } catch {
+    return null;
+  }
 }
 
 export function readManagedTriggerBranch(

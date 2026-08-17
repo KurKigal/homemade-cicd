@@ -25,12 +25,34 @@ vi.mock(
   }),
 );
 
+vi.mock(
+  "../services/signing/signing-service.js",
+  () => ({
+    assertFlutterSigningReady: vi.fn(),
+    SigningServiceError: class extends Error {
+      readonly statusCode: number;
+
+      constructor(
+        message: string,
+        options: { statusCode: number },
+      ) {
+        super(message);
+        this.statusCode = options.statusCode;
+      }
+    },
+  }),
+);
+
 import {
   pipelineRoutes,
 } from "./pipelines.js";
 import {
   saveWorkflow,
 } from "../services/pipelines/pipeline-service.js";
+import {
+  assertFlutterSigningReady,
+  SigningServiceError,
+} from "../services/signing/signing-service.js";
 
 const flutterConfig = {
   branch: "main",
@@ -51,6 +73,28 @@ const flutterConfig = {
   ios: {
     enabled: false,
     unsignedBuild: false,
+  },
+};
+
+const signedFlutterConfig = {
+  ...flutterConfig,
+  android: {
+    enabled: true,
+    apk: true,
+    aab: true,
+    signing: {
+      enabled: true,
+    },
+  },
+  ios: {
+    enabled: true,
+    unsignedBuild: false,
+    signedIpa: {
+      enabled: true,
+      teamId: "ABCDE12345",
+      bundleId: "com.example.app",
+      exportMethod: "app-store",
+    },
   },
 };
 
@@ -171,6 +215,110 @@ describe("pipeline routes", () => {
     }
   });
 
+  it("previews a valid signed Flutter pipeline without credential values", async () => {
+    const app = Fastify();
+    await app.register(pipelineRoutes);
+
+    try {
+      const response = await app.inject({
+        method: "POST",
+        url: "/github/repos/example/project/pipeline/preview",
+        payload: {
+          projectType: "flutter",
+          config: signedFlutterConfig,
+        },
+      });
+      const body = response.json();
+
+      expect(response.statusCode).toBe(200);
+      expect(body.yaml).toContain(
+        "secrets.HOMEMADE_ANDROID_KEYSTORE_BASE64",
+      );
+      expect(body.yaml).toContain(
+        "secrets.HOMEMADE_IOS_CERTIFICATE_P12_BASE64",
+      );
+      expect(body.yaml).not.toContain(
+        "credential-plaintext",
+      );
+      expect(assertFlutterSigningReady)
+        .not.toHaveBeenCalled();
+    } finally {
+      await app.close();
+    }
+  });
+
+  it("applies signed Flutter only after readiness succeeds", async () => {
+    const mockedSaveWorkflow = vi.mocked(saveWorkflow);
+    const mockedReadiness = vi.mocked(
+      assertFlutterSigningReady,
+    );
+    mockedSaveWorkflow.mockResolvedValueOnce({
+      path: ".github/workflows/homemade-ci.yml",
+      commitSha: "signed-commit-sha",
+      commitUrl: undefined,
+      created: true,
+    });
+    mockedReadiness.mockResolvedValueOnce();
+    const app = Fastify();
+    await app.register(pipelineRoutes);
+
+    try {
+      const response = await app.inject({
+        method: "PUT",
+        url: "/github/repos/example/project/pipeline",
+        payload: {
+          projectType: "flutter",
+          config: signedFlutterConfig,
+        },
+      });
+
+      expect(response.statusCode).toBe(200);
+      expect(mockedReadiness).toHaveBeenCalledWith(
+        "example",
+        "project",
+        signedFlutterConfig,
+      );
+      expect(mockedSaveWorkflow).toHaveBeenCalled();
+    } finally {
+      await app.close();
+    }
+  });
+
+  it("blocks signed Flutter apply when readiness fails", async () => {
+    const mockedSaveWorkflow = vi.mocked(saveWorkflow);
+    mockedSaveWorkflow.mockClear();
+    vi.mocked(assertFlutterSigningReady)
+      .mockRejectedValueOnce(
+        new SigningServiceError(
+          "Signing is not ready: Android signing credentials are missing.",
+          { statusCode: 409 },
+        ),
+      );
+    const app = Fastify();
+    await app.register(pipelineRoutes);
+
+    try {
+      const response = await app.inject({
+        method: "PUT",
+        url: "/github/repos/example/project/pipeline",
+        payload: {
+          projectType: "flutter",
+          config: signedFlutterConfig,
+        },
+      });
+
+      expect(response.statusCode).toBe(409);
+      expect(response.json()).toEqual({
+        error: expect.stringContaining(
+          "Android signing credentials are missing",
+        ),
+      });
+      expect(mockedSaveWorkflow).not.toHaveBeenCalled();
+    } finally {
+      await app.close();
+    }
+  });
+
   it("applies a valid Python managed pipeline", async () => {
     const mockedSaveWorkflow = vi.mocked(saveWorkflow);
     mockedSaveWorkflow.mockResolvedValueOnce({
@@ -213,7 +361,10 @@ describe("pipeline routes", () => {
     }
   });
 
-  it.each([
+  it.each<{
+    caseName: string;
+    payload: Record<string, unknown>;
+  }>([
     {
       caseName: "Flutter discriminator with Node.js config",
       payload: {
@@ -320,6 +471,63 @@ describe("pipeline routes", () => {
           packageManager: "pip",
           dependencySource: "requirements",
           frozenLockfile: true,
+        },
+      },
+    },
+    {
+      caseName: "Android signing with Android disabled",
+      payload: {
+        projectType: "flutter",
+        config: {
+          ...signedFlutterConfig,
+          android: {
+            ...signedFlutterConfig.android,
+            enabled: false,
+          },
+        },
+      },
+    },
+    {
+      caseName: "Android signing without an artifact",
+      payload: {
+        projectType: "flutter",
+        config: {
+          ...signedFlutterConfig,
+          android: {
+            ...signedFlutterConfig.android,
+            apk: false,
+            aab: false,
+          },
+        },
+      },
+    },
+    {
+      caseName: "signed and unsigned iOS together",
+      payload: {
+        projectType: "flutter",
+        config: {
+          ...signedFlutterConfig,
+          ios: {
+            ...signedFlutterConfig.ios,
+            unsignedBuild: true,
+          },
+        },
+      },
+    },
+    {
+      caseName: "invalid signed iOS identifiers",
+      payload: {
+        projectType: "flutter",
+        config: {
+          ...signedFlutterConfig,
+          ios: {
+            ...signedFlutterConfig.ios,
+            signedIpa: {
+              ...signedFlutterConfig.ios.signedIpa,
+              teamId: "invalid",
+              bundleId: "invalid",
+            },
+          },
         },
       },
     },

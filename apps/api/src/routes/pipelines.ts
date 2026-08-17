@@ -13,6 +13,10 @@ import {
 } from "../services/pipelines/pipeline-management-service.js";
 import { saveWorkflow } from "../services/pipelines/pipeline-service.js";
 import { generateManagedWorkflow } from "../services/pipelines/managed-workflow-generator.js";
+import {
+  assertFlutterSigningReady,
+  SigningServiceError,
+} from "../services/signing/signing-service.js";
 
 import {
   parseRouteInput,
@@ -76,6 +80,27 @@ export async function pipelineRoutes(app: FastifyInstance) {
 
       if (!definition) {
         return reply;
+      }
+
+      if (definition.projectType === "flutter") {
+        try {
+          await assertFlutterSigningReady(
+            params.owner,
+            params.repo,
+            definition.config,
+          );
+        } catch (error) {
+          if (error instanceof SigningServiceError) {
+            return reply.status(error.statusCode).send({
+              error: error.message,
+            });
+          }
+
+          return reply.status(502).send({
+            error:
+              "Signing readiness could not be verified.",
+          });
+        }
       }
 
       const result = await saveWorkflow({

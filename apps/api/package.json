@@ -14,6 +14,7 @@
     "@fastify/cors": "11.3.0",
     "@homemade-cicd/core": "workspace:*",
     "fastify": "5.11.2",
+    "libsodium-wrappers": "0.8.4",
     "octokit": "^5.0.5",
     "smol-toml": "1.7.1",
     "yaml": "^2.9.0",

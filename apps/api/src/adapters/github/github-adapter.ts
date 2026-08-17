@@ -41,9 +41,107 @@ interface WriteTextFileInput {
   sha?: string;
 }
 
+export interface RepositorySecretMetadata {
+  name: string;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface RepositoryActionsPublicKey {
+  keyId: string;
+  key: string;
+}
+
 export class GitHubAdapter
   implements RepositoryReader
 {
+  async listRepositorySecrets(
+    owner: string,
+    repo: string,
+  ): Promise<RepositorySecretMetadata[]> {
+    const secrets: RepositorySecretMetadata[] = [];
+    let page = 1;
+
+    while (true) {
+      const { data } =
+        await github.rest.actions.listRepoSecrets({
+        owner,
+        repo,
+        per_page: 100,
+        page,
+      });
+
+      secrets.push(
+        ...data.secrets.map((secret) => ({
+          name: secret.name,
+          createdAt: secret.created_at,
+          updatedAt: secret.updated_at,
+        })),
+      );
+
+      if (
+        secrets.length >= data.total_count ||
+        data.secrets.length === 0
+      ) {
+        return secrets;
+      }
+
+      page += 1;
+    }
+  }
+
+  async getRepositoryActionsPublicKey(
+    owner: string,
+    repo: string,
+  ): Promise<RepositoryActionsPublicKey> {
+    const { data } =
+      await github.rest.actions.getRepoPublicKey({
+        owner,
+        repo,
+      });
+
+    return {
+      keyId: data.key_id,
+      key: data.key,
+    };
+  }
+
+  async createOrUpdateRepositorySecret(
+    owner: string,
+    repo: string,
+    name: string,
+    encryptedValue: string,
+    keyId: string,
+  ): Promise<void> {
+    await github.rest.actions.createOrUpdateRepoSecret({
+      owner,
+      repo,
+      secret_name: name,
+      encrypted_value: encryptedValue,
+      key_id: keyId,
+    });
+  }
+
+  async deleteRepositorySecret(
+    owner: string,
+    repo: string,
+    name: string,
+  ): Promise<void> {
+    try {
+      await github.rest.actions.deleteRepoSecret({
+        owner,
+        repo,
+        secret_name: name,
+      });
+    } catch (error) {
+      if (isNotFound(error)) {
+        return;
+      }
+
+      throw error;
+    }
+  }
+
   async dispatchWorkflow(
     owner: string,
     repo: string,

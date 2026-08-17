@@ -9,5 +9,12 @@ dist/
 *.db-shm
 *.db-wal
 
+# Mobile signing credentials
+*.jks
+*.keystore
+*.p12
+*.mobileprovision
+key.properties
+
 .DS_Store
 Thumbs.db
