@@ -88,6 +88,7 @@ Uzun vadede sistemin SaaS veya çok kullanıcılı bir ürüne dönüştürüleb
 - [Flutter Workflow Generator](#flutter-workflow-generator)
 - [Node.js Workflow Generator](#nodejs-workflow-generator)
 - [Python Workflow Generator](#python-workflow-generator)
+- [Mobile Signing](#mobile-signing)
 - [Android Pipeline](#android-pipeline)
 - [iOS Pipeline](#ios-pipeline)
 - [Workflow'un GitHub'a Yazılması](#workflowun-githuba-yazılması)
@@ -283,7 +284,7 @@ dönüşümü yapılabilir.
 
 # Mevcut Özellikler
 
-Uygulama şu anda Flutter, Node.js ve Python repository'leri için uçtan uca pipeline oluşturma, mevcut pipeline'ları yönetme ve GitHub Actions çalışmalarını izleme akışını desteklemektedir:
+Uygulama şu anda Flutter, Node.js ve Python repository'leri için uçtan uca pipeline oluşturma, mevcut pipeline'ları yönetme ve GitHub Actions çalışmalarını izleme akışını desteklemektedir. Flutter repository'lerinde Android ve iOS signing credential'ları ayrıca GitHub Actions repository secrets olarak yönetilebilir:
 
 ```text
 GitHub bağlantısı
@@ -364,6 +365,10 @@ Flutter için:
 - Android APK
 - Android AAB
 - unsigned iOS build
+- Android signing readiness ve credential status
+- signed Android APK/AAB
+- iOS signing readiness ve credential status
+- signed iOS IPA
 
 Node.js için:
 
@@ -377,6 +382,14 @@ Python için:
 - `ruff check .`, `pytest` ve `mypy .` görevleri
 - Python distribution package build
 - başarılı build sonrasında `python-dist` artifact'i
+
+Flutter mobile signing için:
+
+- `.jks` / `.keystore` ve Android signing password/alias yönetimi
+- signed `android-apk-signed` ve `android-aab-signed` artifact'leri
+- `.p12` distribution certificate ve `.mobileprovision` yönetimi
+- temporary macOS keychain üzerinden `ios-ipa-signed` artifact'i
+- secret-bearing job'ların pull request event'lerinde çalıştırılmaması
 
 ### Trigger
 
@@ -470,6 +483,7 @@ Octokit
 Zod
 YAML
 smol-toml
+libsodium-wrappers
 tsx
 ```
 
@@ -492,6 +506,10 @@ Internal pipeline config'in GitHub Actions workflow YAML'ına çevrilmesi.
 ### smol-toml
 
 Python repository'lerindeki `pyproject.toml` ve `Pipfile` metadata'sını yorum/string false-positive üretmeden, typed bir TOML yapısı olarak okumak için yalnız API package'ında kullanılır.
+
+### libsodium-wrappers
+
+Signing credential'larını GitHub'a göndermeden önce repository public key'i ile LibSodium sealed-box encryption uygulamak için yalnız API package'ında kullanılır. Cryptographic primitive Homemade tarafından yeniden implement edilmez.
 
 ### tsx
 
@@ -613,6 +631,15 @@ apps/web/src/
 │   ├── project-analysis/
 │   │   └── ProjectAnalysisPanel.tsx
 │   │
+│   ├── signing/
+│   │   ├── AndroidSigningCredentials.tsx
+│   │   ├── IosSigningCredentials.tsx
+│   │   ├── SigningCredentialsPanel.tsx
+│   │   ├── SigningStatusSummary.tsx
+│   │   ├── credential-files.ts
+│   │   ├── flutter-signing-config.ts
+│   │   └── useSigningStatus.ts
+│   │
 │   ├── repositories/
 │   │   ├── RepositoryCard.tsx
 │   │   ├── RepositoryList.tsx
@@ -667,6 +694,7 @@ apps/api/src/
 │   ├── github.ts
 │   ├── pipelines.ts
 │   ├── runs.ts
+│   ├── signing.ts
 │   └── validation.ts
 │
 ├── services/
@@ -695,6 +723,11 @@ apps/api/src/
 │   ├── runs/
 │   │   └── runs-service.ts
 │   │
+│   ├── signing/
+│   │   ├── secret-encryption.ts
+│   │   ├── signing-readiness.ts
+│   │   └── signing-service.ts
+│   │
 │   ├── project-analysis-service.ts
 │   ├── project-detector.ts
 │   └── python-project-metadata.ts
@@ -716,6 +749,7 @@ packages/core/
 │   ├── github.ts
 │   ├── project.ts
 │   ├── pipeline.ts
+│   ├── signing.ts
 │   ├── runs.ts
 │   ├── artifacts.ts
 │   └── index.ts
@@ -940,6 +974,7 @@ Flutter CI/CD pipeline konfigürasyon arayüzüdür. Node.js projeleri için `No
 ☑ Enable Android build
 ☑ Build APK
 ☑ Build AAB
+☐ Use release signing
 ```
 
 ## iOS
@@ -947,6 +982,11 @@ Flutter CI/CD pipeline konfigürasyon arayüzüdür. Node.js projeleri için `No
 ```text
 ☑ Enable iOS build
 ☑ Unsigned iOS build
+☐ Signed IPA
+
+Team ID
+Bundle ID
+Export method: app-store / ad-hoc / development
 ```
 
 ## Trigger
@@ -969,6 +1009,12 @@ Create Pipeline
 Node.js builder ayrıca Node sürümü, pnpm/npm/yarn/Bun, frozen lockfile ve repository'de bulunan `lint`, `typecheck`, `test`, `build` script'lerini yapılandırır.
 
 Python builder varsayılan Python `3.12` değerini kullanır; detector tarafından bulunan pip/uv/Poetry/Pipenv ekosisteminin dependency source, frozen lockfile ve Ruff/Pytest/Mypy/Build task ayarlarını yönetir. Create modunda yalnız detector tarafından bulunan manager/source ve task'lar sunulur. Edit modunda inspection metadata'sı geçici olarak alınamasa bile reverse parse edilen mevcut config korunur.
+
+Flutter builder, signing configuration ile credential yönetimini ayrı tutar. Android `signing.enabled` ile iOS `signedIpa` içindeki Team ID, Bundle ID ve export method workflow'a yazılabilen non-secret config'tir. Keystore, password, alias, certificate ve provisioning profile değerleri ise yalnız credential panelindeki kısa ömürlü form state'inde bulunur; query cache'e veya pipeline config'e eklenmez.
+
+Credential paneli status response'tan yalnız `configured`/`missing` bilgisi gösterir. Dosyalar tarayıcı belleğinde base64'e çevrilir, GitHub'ın 48 KB encoded secret sınırı aşılırsa istek gönderilmez ve başarılı mutation sonrasında file/password state'i temizlenir. Save/delete yalnız merkezi `queryKeys.signing(owner, repo)` anahtarını invalidate eder.
+
+Signed pipeline oluşturma veya güncelleme; ilgili platformun repository yapılandırması ya da credentials'ı hazır değilse engellenir. Aynı durumda preview kullanılabilir ve gerekli düzeltmeler açık şekilde listelenir. Unsigned Flutter pipeline'ları signing status alınamasa dahi oluşturulabilir.
 
 ---
 
@@ -1019,7 +1065,7 @@ Temel görevleri:
 - Fastify instance oluşturmak
 - CORS register etmek
 - health endpoint tanımlamak
-- GitHub, runs, artifacts ve pipeline route'larını register etmek
+- GitHub, runs, artifacts, pipeline ve signing route'larını register etmek
 - HTTP server'ı başlatmak
 
 Development portu:
@@ -1121,6 +1167,9 @@ Repository content
 File existence
 File SHA
 File write/update
+Repository Actions secret metadata
+Repository Actions public key
+Encrypted repository secret create/update/delete
 ```
 
 gibi GitHub-specific işlemler adapter tarafından gerçekleştirilir.
@@ -1515,6 +1564,21 @@ pythonPipelineSchema
 managedPipelineSchema
 ```
 
+## Signing Models
+
+```text
+AndroidSigningConfig
+IosSignedIpaConfig
+AndroidSigningCredentialsRequest
+IosSigningCredentialsRequest
+RepositorySigningStatus
+Signing readiness/status schemas
+Canonical signing secret names
+GitHub Actions 48 KB secret limit
+```
+
+Credential request modelleri yalnız browser → local API sınırında kullanılır. Secret value içermeyen `RepositorySigningStatus` ise API → web yönünde kullanılır. Flutter pipeline config yalnız non-secret signing tercihlerini taşır.
+
 ---
 
 # Zod Kullanımı
@@ -1624,15 +1688,26 @@ Pipeline sisteminde UI doğrudan YAML üretmez.
   android: {
     enabled: true,
     apk: true,
-    aab: true
+    aab: true,
+    signing: {
+      enabled: true
+    }
   },
 
   ios: {
     enabled: true,
-    unsignedBuild: true
+    unsignedBuild: false,
+    signedIpa: {
+      enabled: true,
+      teamId: "ABCDE12345",
+      bundleId: "com.example.app",
+      exportMethod: "app-store"
+    }
   }
 }
 ```
+
+Bu config credential value taşımaz. Secret'lar canonical olarak GitHub Actions repository secrets içinde tutulur ve generated YAML yalnız `${{ secrets.SECRET_NAME }}` referansları içerir.
 
 Flutter'a özgü alanlar `FlutterPipelineConfig`, Node.js'e özgü alanlar `NodePipelineConfig`, Python'a özgü alanlar `PythonPipelineConfig` olarak tanımlanır. API'ye gönderilen ortak discriminated union ise:
 
@@ -1759,6 +1834,113 @@ Python parser yalnız Homemade generator'ın sabit `quality` job ve komut format
 
 ---
 
+# Mobile Signing
+
+Milestone 7 yeni bir project type eklemez. Mobile signing, mevcut `FlutterPipelineConfig` için Android ve iOS capability'sidir:
+
+```text
+ManagedPipelineConfig
+├── flutter
+│   ├── unsigned Android / iOS
+│   └── signed Android / iOS
+├── node
+└── python
+```
+
+En önemli sınır non-secret pipeline configuration ile credential material'in ayrılmasıdır:
+
+```text
+NON-SECRET PIPELINE CONFIG        SECRET CREDENTIALS
+──────────────────────────        ──────────────────
+Android signing enabled           Android keystore
+iOS signed IPA enabled            Store/key passwords
+Apple Team ID                     Key alias
+Bundle ID                         Distribution .p12
+Export method                     Certificate password
+                                  Provisioning profile
+```
+
+Secret değerler `FlutterPipelineConfig`, YAML metadata marker'ları, local database, browser storage veya TanStack Query cache içinde tutulmaz.
+
+## Canonical GitHub Actions Secrets
+
+Secret adları `@homemade-cicd/core` içindeki tek source-of-truth'tan gelir:
+
+```text
+HOMEMADE_ANDROID_KEYSTORE_BASE64
+HOMEMADE_ANDROID_STORE_PASSWORD
+HOMEMADE_ANDROID_KEY_PASSWORD
+HOMEMADE_ANDROID_KEY_ALIAS
+
+HOMEMADE_IOS_CERTIFICATE_P12_BASE64
+HOMEMADE_IOS_CERTIFICATE_PASSWORD
+HOMEMADE_IOS_PROVISIONING_PROFILE_BASE64
+```
+
+Canonical storage GitHub Actions repository secrets'tır. Homemade CI/CD credential plaintext değerlerini persist etmez ve status endpoint'i bu değerleri hiçbir zaman geri döndürmez. Response yalnız her secret'ın bulunup bulunmadığını, platform/project readiness durumunu, issues listesini ve güvenli repository metadata'sını taşır.
+
+Upload akışı:
+
+```text
+Browser file/password state
+          ↓
+Local Fastify API
+          ↓
+GitHub repository public key
+          ↓
+LibSodium sealed box encryption
+          ↓
+GitHub Actions Secrets REST API
+```
+
+[GitHub'ın repository secrets REST API'si](https://docs.github.com/en/rest/actions/secrets) create/update öncesinde secret'ın repository public key ile LibSodium kullanılarak encrypt edilmesini gerektirir. API bu işlem için maintained `libsodium-wrappers` paketini kullanır; cryptography primitive'i manuel implement edilmez.
+
+[GitHub Actions secret limiti](https://docs.github.com/en/actions/reference/security/secrets) değer başına 48 KB'dir. File credential'lar browser'da base64'e çevrildikten sonra encoded UTF-8 boyutu kontrol edilir; backend aynı limiti ve strict base64 formatını tekrar doğrular. Limit aşılırsa secret GitHub'a gönderilmez.
+
+## Signing Readiness
+
+Credentials bulunması tek başına signed build için yeterli kabul edilmez. Status servisi iki ayrı ekseni birleştirir:
+
+```text
+Repository project readiness
+            +
+Required GitHub secrets configured
+            =
+Platform ready
+```
+
+Android readiness, `android/app/build.gradle` veya `build.gradle.kts` içindeki official Flutter release signing yapısını ve runtime `key.properties` kullanım sinyallerini güvenli şekilde kontrol eder. iOS readiness, `ios/Runner.xcodeproj/project.pbxproj` içinden Bundle ID ve Development Team metadata'sını çıkarır. Homemade arbitrary Gradle veya Xcode source dosyalarını otomatik patch etmez.
+
+Flutter builder signed output seçildiğinde readiness issues'larını gösterir. Repository configuration veya credentials eksikse preview açık kalır fakat Create/Update engellenir. Unsigned pipeline oluşturma etkilenmez.
+
+## Credential UI Security
+
+Android paneli `.jks` / `.keystore`, key alias, store password ve key password; iOS paneli `.p12`, certificate password ve `.mobileprovision` kabul eder. Password alanları gerçek password input'larıdır. Daha önce kaydedilmiş bir secret yalnız `Configured` olarak gösterilir; bilinmeyen bir değer password placeholder'ı gibi taklit edilmez.
+
+Sensitive payload API client tarafından loglanmaz ve TanStack mutation/query variables içine yazılmaz. Başarılı save sonrasında password state, `File` referansları ve native file input'lar temizlenir. Save/delete sonrasında yalnız merkezi signing status query key'i invalidate edilir. Multi-secret GitHub operasyonu kısmi tamamlanırsa status yeniden çekilerek gerçek durum gösterilir.
+
+## Fine-Grained PAT Permission
+
+Mevcut Contents, Workflows, Actions ve Metadata erişimlerine ek olarak signing credential yönetimi için fine-grained token'da repository-level:
+
+```text
+Secrets: Read and write
+```
+
+izni gerekir. GitHub'ın endpoint tablosuna göre public key/status okuması `Secrets: read`, create/update/delete ise `Secrets: write` ister. İzni yalnız Homemade tarafından yönetilecek repository'lerle sınırlandırmak önerilir.
+
+## Pull Request Security
+
+Quality job pull request event'inde çalışmaya devam eder. Secret kullanan `android_signed` ve `ios_signed` job'larında ise explicit:
+
+```text
+github.event_name != 'pull_request'
+```
+
+job condition'ı bulunur. Böylece signing yalnız trusted push ve manual dispatch context'lerinde çalışır. Workflow `pull_request_target` kullanmaz; untrusted PR source code'u signing credentials ile hiçbir zaman çalıştırılmaz. Generated workflow minimum `contents: read` permission'ını korur ve GitHub Secrets API'ye write permission istemez. Secret create/update işlemi local Homemade backend tarafından yapılır.
+
+---
+
 # Quality Job
 
 Analyze veya test seçilmişse:
@@ -1814,11 +1996,22 @@ Flutter Setup
    ↓
 flutter pub get
    ↓
-APK
-   ↓
-AAB
-   ↓
-Artifacts
+Signing disabled ─────────────┐
+   │                          │
+   │                  Signing enabled
+   │                          ↓
+   │                Decode temporary keystore
+   │                          ↓
+   │                Runtime android/key.properties
+   │                          ↓
+APK / AAB              Signed APK / AAB
+   │                          ↓
+   │                  Signature verification
+   └──────────────┬───────────┘
+                  ↓
+              Artifacts
+                  ↓
+          Always-run cleanup
 ```
 
 Java:
@@ -1855,6 +2048,8 @@ Artifact adı:
 android-apk
 ```
 
+Signing etkinse build komutu aynı official Flutter release komutudur; repository'nin release signing configuration'ı runtime `android/key.properties` dosyasını kullanır. APK `apksigner verify --verbose` ile doğrulanır ve artifact adı `android-apk-signed` olur.
+
 ---
 
 # AAB Build
@@ -1878,6 +2073,8 @@ Artifact adı:
 ```text
 android-aab
 ```
+
+Signing etkinse AAB, `jarsigner -verify` ve `keytool -printcert -jarfile` ile doğrulanır; artifact adı `android-aab-signed` olur. Temporary keystore ile `android/key.properties`, job başarılı veya başarısız olsa da cleanup step'inde kaldırılır. Bu akış [Flutter'ın official Android signing rehberi](https://docs.flutter.dev/deployment/android) ile uyumlu standard repository yapılandırmasını bekler; Gradle source otomatik değiştirilmez.
 
 ---
 
@@ -1911,13 +2108,7 @@ Bu önemli çünkü Flutter iOS build için macOS/Xcode environment gerekir.
 
 Kullanıcının local geliştirme bilgisayarı Windows olsa bile iOS compilation GitHub'ın macOS runner'ında yapılabilir.
 
-Mevcut ilk aşamada:
-
-```text
-unsigned iOS build
-```
-
-desteklenmektedir.
+Unsigned iOS build ve signed IPA seçenekleri desteklenmektedir. Bu iki seçenek aynı anda etkinleştirilemez.
 
 ---
 
@@ -1957,27 +2148,37 @@ ios-unsigned
 
 ---
 
-# Neden İlk Aşamada Unsigned iOS?
+# Signed iOS IPA Flow
 
-Signed IPA üretimi ek olarak:
+Signed job `macos-latest` üzerinde ayrı çalışır:
 
 ```text
-Apple certificate
-Provisioning profile
-Signing identity
-Secrets
-Bundle configuration
+Checkout / Flutter setup / pub get
+              ↓
+Decode .p12 + .mobileprovision into RUNNER_TEMP
+              ↓
+Create random-password temporary keychain
+              ↓
+Import certificate and code-signing identity
+              ↓
+Decode and validate provisioning metadata
+              ↓
+Team ID + Bundle ID match
+              ↓
+Install profile for this job
+              ↓
+flutter build ipa --release [--export-method]
+              ↓
+Verify IPA output and ZIP integrity
+              ↓
+ios-ipa-signed artifact
+              ↓
+Always-run keychain/profile/file cleanup
 ```
 
-gerektirir.
+`app-store` default export behaviorini, `ad-hoc` ve `development` ise Flutter'ın güncel `--export-method` desteğini kullanır. [Flutter iOS deployment dokümantasyonuna](https://docs.flutter.dev/deployment/ios) göre IPA çıktısı `build/ios/ipa/*.ipa` altında üretilir.
 
-İlk milestone'un amacı öncelikle:
-
-> Proje iOS için compile oluyor mu?
-
-sorusunu cevaplamaktır.
-
-Signed IPA ve App Store/TestFlight entegrasyonu sonraki milestone'lara bırakılmıştır.
+Temporary keychain password runtime sırasında rastgele oluşturulur; kullanıcı credential'ı değildir ve runner ömrü dışında saklanmaz. Provisioning profile Team ID ve application identifier bilgisi pipeline config ile eşleşmezse build credential content'i loglamadan erken fail eder. Xcode project source otomatik patch edilmez.
 
 ---
 
@@ -2194,6 +2395,54 @@ Repository'nin proje yapısını analiz eder.
 
 ---
 
+# Signing Status ve Credentials
+
+```http
+GET    /api/github/repos/:owner/:repo/signing
+PUT    /api/github/repos/:owner/:repo/signing/android
+DELETE /api/github/repos/:owner/:repo/signing/android
+PUT    /api/github/repos/:owner/:repo/signing/ios
+DELETE /api/github/repos/:owner/:repo/signing/ios
+```
+
+GET ve başarılı platform mutation'ları secret value içermeyen aynı `RepositorySigningStatus` modelini döndürür:
+
+```json
+{
+  "android": {
+    "platformPresent": true,
+    "projectReady": true,
+    "credentialsReady": false,
+    "ready": false,
+    "issues": ["Android signing credentials are missing."],
+    "secrets": {
+      "keystore": true,
+      "storePassword": true,
+      "keyPassword": false,
+      "keyAlias": true
+    }
+  },
+  "ios": {
+    "platformPresent": true,
+    "projectReady": true,
+    "credentialsReady": true,
+    "ready": true,
+    "issues": [],
+    "detectedTeamId": "ABCDE12345",
+    "detectedBundleId": "com.example.app",
+    "secrets": {
+      "certificate": true,
+      "certificatePassword": true,
+      "provisioningProfile": true
+    }
+  }
+}
+```
+
+Android PUT body, base64 keystore ile üç string credential alanını; iOS PUT body ise base64 certificate/profile ile certificate password'ü taşır. Bu request body'ler sensitive route olarak log suppression ile çalışır. DELETE operasyonları platformun canonical secret set'ini idempotent biçimde kaldırır. GitHub multi-secret transaction sunmadığından partial failure açıkça raporlanır ve UI status'u yeniden çeker.
+
+---
+
 # Pipeline Preview
 
 ```http
@@ -2219,11 +2468,20 @@ Request body:
     "android": {
       "enabled": true,
       "apk": true,
-      "aab": true
+      "aab": true,
+      "signing": {
+        "enabled": true
+      }
     },
     "ios": {
       "enabled": true,
-      "unsignedBuild": true
+      "unsignedBuild": false,
+      "signedIpa": {
+        "enabled": true,
+        "teamId": "ABCDE12345",
+        "bundleId": "com.example.app",
+        "exportMethod": "app-store"
+      }
     }
   }
 }
@@ -2760,6 +3018,12 @@ dist/
 *.db-shm
 *.db-wal
 
+*.jks
+*.keystore
+*.p12
+*.mobileprovision
+key.properties
+
 .DS_Store
 Thumbs.db
 ```
@@ -2802,7 +3066,7 @@ Frontend hiçbir noktada Personal Access Token'ı görmez.
 
 Token'ın yalnızca Homemade CI/CD'nin ihtiyaç duyduğu repository ve izinlerle sınırlandırılması önerilir.
 
-Workflow yazılması gerektiği için repository content/workflow erişimi gerekir.
+Workflow yazılması gerektiği için repository content/workflow erişimi gerekir. Mobile signing credential status ve mutation endpoint'leri için repository `Secrets: Read and write` izni ayrıca zorunludur.
 
 Token:
 
@@ -2810,6 +3074,17 @@ Token:
 - README'ye eklenmemeli,
 - `.env.example` içerisine gerçek değer olarak yazılmamalı,
 - Git'e commit edilmemelidir.
+
+## Signing Credential Security
+
+- Signing credential'ları canonical olarak GitHub Actions repository secrets içinde saklanır.
+- Homemade CI/CD plaintext credential value'larını database'e, dosyaya veya git history'ye persist etmez.
+- GitHub secret değerleri read endpoint'lerinden geri alınamaz; UI yalnız boolean status gösterir.
+- Browser credential payload'ı local/session storage, URL, console veya TanStack cache'e yazılmaz.
+- API sensitive signing route'larında request logging kapalıdır; error response credential value içermez.
+- Generated YAML yalnız canonical `${{ secrets.* }}` referanslarını içerir.
+- Signed jobs pull request event'inde çalışmaz ve `pull_request_target` kullanılmaz.
+- Temporary keystore, `key.properties`, `.p12`, provisioning profile ve keychain always-run cleanup adımlarında silinir.
 
 ---
 
@@ -3336,6 +3611,8 @@ bulunmamalıdır.
 
 Node.js tarafında tüm package manager kurulumları, frozen/non-frozen davranışı, görev ve trigger kombinasyonları test edilir. Python tarafında pip/uv/Poetry/Pipenv install akışları, task komutları, manual-only branch, build artifact'i ve generator/parser round-trip davranışı doğrulanır. Üç project type managed dispatcher üzerinden test edilir; eski marker'sız Flutter YAML desteği de geriye uyumluluk testiyle korunur.
 
+Mobile signing testleri Android Groovy/Kotlin DSL readiness sinyallerini, iOS Team/Bundle detection'ını, complete/partial secret status'u, save/delete ve permission error'larını adapter fake'leri üzerinden doğrular. Generator testleri secret reference, temporary material, signature verification, artifact adları, cleanup ve pull request job condition'larını kapsar. Signing marker parser testleri Android signed, iOS signed, her ikisi signed ve legacy unsigned config round-trip'larını kontrol eder. Testlerde gerçek keystore, certificate, provisioning profile veya GitHub mutation kullanılmaz.
+
 ---
 
 # Bilinen Sınırlamalar
@@ -3346,7 +3623,6 @@ Henüz desteklenmeyen başlıca özellikler:
 
 ### CI/CD
 
-- signed iOS IPA
 - TestFlight deployment
 - App Store deployment
 - Google Play deployment
@@ -3360,6 +3636,9 @@ Henüz desteklenmeyen başlıca özellikler:
 - repository'ye özel pytest plugin'leri ve undeclared optional development dependency'lerini otomatik çıkarma
 - dependency scanning
 - security scanning
+- 48 KB'ı aşan encoded keystore/certificate/profile için large-secret workaround
+- custom Gradle/Xcode signing source'unu otomatik patch etme
+- Android/iOS signing readiness için repository'ye özel custom build logic'i yorumlama
 
 ### GitHub Actions Monitoring
 
@@ -3392,8 +3671,8 @@ Güncel milestone durumu:
 | M4 | Pipeline Management | DONE |
 | M5 | Node.js Pipelines | DONE |
 | M6 | Python Pipelines | DONE |
-| M7 | Mobile Signing | NEXT |
-| M8 | Releases | PLANNED |
+| M7 | Mobile Signing | DONE |
+| M8 | Releases | NEXT |
 | M9 | Store Deployment | PLANNED |
 
 ## Milestone 0 — Bootstrap
@@ -3606,19 +3885,24 @@ Durum: `DONE`
 
 # Milestone 7 — Mobile Signing
 
-Hedef:
+Tamamlanan kapsam:
 
 ```text
-Certificate
-Provisioning Profile
-GitHub Secrets
-macOS runner
+Android/iOS signing readiness
+GitHub Actions repository secret status
+LibSodium sealed-box secret upload
+Credential save/delete UI
+Signed Android APK/AAB
+Android signature verification
+iOS temporary keychain/profile validation
 Signed IPA
+Signed artifact'ler
+Pull request secret isolation
+Flutter signing config reverse parse/edit
+Legacy unsigned Flutter compatibility
 ```
 
-UI üzerinden signing configuration yönetimi planlanmaktadır.
-
-Durum: `NEXT`
+Durum: `DONE`
 
 ---
 
@@ -3635,6 +3919,8 @@ Artifacts
 ```
 
 ile GitHub Release oluşturma.
+
+Durum: `NEXT`
 
 ---
 
@@ -3878,7 +4164,7 @@ detaylarını kendisi yönetir.
 
 # Current Status
 
-Proje Flutter, Node.js ve Python için gerçek end-to-end CI/CD akışlarını tamamlamıştır. Milestone 0–6 kapsamı çalışır durumdadır; sıradaki hedef Milestone 7 Mobile Signing'dir.
+Proje Flutter, Node.js ve Python için gerçek end-to-end CI/CD akışlarını tamamlamıştır. Flutter tarafında Android signed APK/AAB ve iOS signed IPA üretimi, GitHub Actions repository secrets yönetimi ve signing readiness kontrolleri desteklenir. Milestone 0–7 kapsamı çalışır durumdadır; sıradaki hedef Milestone 8 Releases'tir.
 
 Çalışan akış:
 
@@ -3892,6 +4178,8 @@ Repository Inspection
 Flutter / Node.js / Python Detection
         ↓
 Project-specific Pipeline Builder
+        ↓
+Flutter Signing Readiness + Credentials
         ↓
 Preview
         ↓

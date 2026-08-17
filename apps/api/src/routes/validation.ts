@@ -2,8 +2,8 @@ import type { FastifyReply } from "fastify";
 import { z } from "zod";
 
 export const repositoryParamsSchema = z.object({
-  owner: z.string().min(1),
-  repo: z.string().min(1),
+  owner: z.string().trim().min(1),
+  repo: z.string().trim().min(1),
 });
 
 export const runParamsSchema = repositoryParamsSchema.extend({

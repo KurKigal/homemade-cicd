@@ -1,5 +1,7 @@
 import type {
+  AndroidSigningCredentialsRequest,
   GitHubUser,
+  IosSigningCredentialsRequest,
   ManagedPipelineConfig,
   PipelineApplyResult,
   PipelineCommandResult,
@@ -7,6 +9,7 @@ import type {
   PipelinePreview,
   Repository,
   RepositoryInspection,
+  RepositorySigningStatus,
   RepositoryWorkflowsResponse,
   WorkflowArtifactsResponse,
   WorkflowCommandResult,
@@ -19,13 +22,37 @@ async function request<T>(url: string, options?: RequestInit): Promise<T> {
   const response = await fetch(url, options);
 
   if (!response.ok) {
-    const message = await response.text().catch(() => "");
-    throw new Error(
-      message || `Request failed: ${response.status} ${response.statusText}`,
-    );
+    throw new Error(await readErrorMessage(response));
   }
 
   return response.json() as Promise<T>;
+}
+
+async function readErrorMessage(response: Response): Promise<string> {
+  const fallback = `Request failed: ${response.status} ${response.statusText}`;
+  const body = await response.text().catch(() => "");
+
+  if (!body) {
+    return fallback;
+  }
+
+  try {
+    const payload: unknown = JSON.parse(body);
+
+    if (typeof payload === "object" && payload !== null) {
+      if ("error" in payload && typeof payload.error === "string") {
+        return payload.error;
+      }
+
+      if ("message" in payload && typeof payload.message === "string") {
+        return payload.message;
+      }
+    }
+  } catch {
+    return body;
+  }
+
+  return fallback;
 }
 
 function jsonRequest<T>(
@@ -62,6 +89,45 @@ export const api = {
 
     inspectRepository: (owner: string, repo: string) =>
       request<RepositoryInspection>(repositoryUrl(owner, repo, "/inspect")),
+
+    signingStatus: (owner: string, repo: string) =>
+      request<RepositorySigningStatus>(
+        repositoryUrl(owner, repo, "/signing"),
+      ),
+
+    saveAndroidSigningCredentials: (
+      owner: string,
+      repo: string,
+      credentials: AndroidSigningCredentialsRequest,
+    ) =>
+      jsonRequest<RepositorySigningStatus>(
+        repositoryUrl(owner, repo, "/signing/android"),
+        "PUT",
+        credentials,
+      ),
+
+    deleteAndroidSigningCredentials: (owner: string, repo: string) =>
+      request<RepositorySigningStatus>(
+        repositoryUrl(owner, repo, "/signing/android"),
+        { method: "DELETE" },
+      ),
+
+    saveIosSigningCredentials: (
+      owner: string,
+      repo: string,
+      credentials: IosSigningCredentialsRequest,
+    ) =>
+      jsonRequest<RepositorySigningStatus>(
+        repositoryUrl(owner, repo, "/signing/ios"),
+        "PUT",
+        credentials,
+      ),
+
+    deleteIosSigningCredentials: (owner: string, repo: string) =>
+      request<RepositorySigningStatus>(
+        repositoryUrl(owner, repo, "/signing/ios"),
+        { method: "DELETE" },
+      ),
 
     previewPipeline: (
       owner: string,

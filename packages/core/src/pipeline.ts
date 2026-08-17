@@ -6,6 +6,10 @@ import {
   pythonPackageManagerSchema,
   pythonTasksSchema,
 } from "./project.js";
+import {
+  androidSigningConfigSchema,
+  iosSignedIpaConfigSchema,
+} from "./signing.js";
 
 export const HOMEMADE_WORKFLOW_FILE =
   "homemade-ci.yml";
@@ -23,7 +27,7 @@ export type PipelineTrigger =
   z.infer<typeof pipelineTriggerSchema>;
 
 export const flutterPipelineSchema = z.object({
-  branch: z.string().min(1),
+  branch: z.string().trim().min(1),
 
   trigger: pipelineTriggerSchema,
 
@@ -36,12 +40,59 @@ export const flutterPipelineSchema = z.object({
     enabled: z.boolean(),
     apk: z.boolean(),
     aab: z.boolean(),
+    signing:
+      androidSigningConfigSchema.optional(),
   }),
 
   ios: z.object({
     enabled: z.boolean(),
     unsignedBuild: z.boolean(),
+    signedIpa:
+      iosSignedIpaConfigSchema.optional(),
   }),
+}).superRefine((config, context) => {
+  if (config.android.signing?.enabled) {
+    if (!config.android.enabled) {
+      context.addIssue({
+        code: "custom",
+        path: ["android", "enabled"],
+        message:
+          "Android builds must be enabled when Android signing is enabled.",
+      });
+    }
+
+    if (!config.android.apk && !config.android.aab) {
+      context.addIssue({
+        code: "custom",
+        path: ["android", "signing", "enabled"],
+        message:
+          "Android signing requires at least one APK or AAB artifact.",
+      });
+    }
+  }
+
+  if (!config.ios.signedIpa?.enabled) {
+    return;
+  }
+
+  if (!config.ios.enabled) {
+    context.addIssue({
+      code: "custom",
+      path: ["ios", "enabled"],
+      message:
+        "iOS builds must be enabled when signed IPA generation is enabled.",
+    });
+  }
+
+  if (config.ios.unsignedBuild) {
+    context.addIssue({
+      code: "custom",
+      path: ["ios", "unsignedBuild"],
+      message:
+        "Unsigned iOS and signed IPA builds cannot be enabled together.",
+    });
+  }
+
 });
 
 export type FlutterPipelineConfig =
