@@ -6,6 +6,7 @@ import { API_LOGGER_OPTIONS } from "./config/logger.js";
 import { artifactsRoutes } from "./routes/artifacts.js";
 import { githubRoutes } from "./routes/github.js";
 import { pipelineRoutes } from "./routes/pipelines.js";
+import { releasesRoutes } from "./routes/releases.js";
 import { runsRoutes } from "./routes/runs.js";
 import { signingRoutes } from "./routes/signing.js";
 
@@ -30,6 +31,7 @@ export async function buildApp() {
   await app.register(artifactsRoutes, { prefix: API_PREFIX });
   await app.register(pipelineRoutes, { prefix: API_PREFIX });
   await app.register(signingRoutes, { prefix: API_PREFIX });
+  await app.register(releasesRoutes, { prefix: API_PREFIX });
 
   return app;
 }

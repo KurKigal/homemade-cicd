@@ -4,3 +4,4 @@ export * from "./pipeline.js";
 export * from "./runs.js";
 export * from "./artifacts.js";
 export * from "./signing.js";
+export * from "./releases.js";

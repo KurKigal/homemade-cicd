@@ -7,6 +7,8 @@ export const queryKeys = {
     ["github", "signing", owner, repo] as const,
   runs: (owner?: string, repo?: string) =>
     ["github", "runs", owner, repo] as const,
+  releases: (owner?: string, repo?: string) =>
+    ["github", "releases", owner, repo] as const,
   run: (owner: string | undefined, repo: string | undefined, runId: number) =>
     ["github", "run", owner, repo, runId] as const,
   runJobs: (owner: string | undefined, repo: string | undefined, runId: number) =>

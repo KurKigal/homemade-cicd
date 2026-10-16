@@ -12,6 +12,7 @@ import {
   GitFork,
   RefreshCw,
   Server,
+  Tag,
 } from "lucide-react";
 
 import { NavLink } from "react-router";
@@ -77,6 +78,13 @@ export function AppLayout({
             }
           >
             Pipelines
+          </SidebarLink>
+
+          <SidebarLink
+            to="/releases"
+            icon={<Tag size={18} />}
+          >
+            Releases
           </SidebarLink>
         </nav>
 
