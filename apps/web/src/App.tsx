@@ -20,6 +20,10 @@ import {
   RunsPage,
 } from "./pages/RunsPage";
 
+import {
+  ReleasesPage,
+} from "./pages/ReleasesPage";
+
 function App() {
   return (
     <Routes>
@@ -72,6 +76,20 @@ function App() {
         path="/pipelines/:owner/:repo"
         element={
           <PipelinesPage />
+        }
+      />
+
+      <Route
+        path="/releases"
+        element={
+          <ReleasesPage />
+        }
+      />
+
+      <Route
+        path="/releases/:owner/:repo"
+        element={
+          <ReleasesPage />
         }
       />
 

@@ -1,5 +1,7 @@
 import type {
   AndroidSigningCredentialsRequest,
+  CreateReleaseRequest,
+  CreateReleaseResult,
   GitHubUser,
   IosSigningCredentialsRequest,
   ManagedPipelineConfig,
@@ -9,6 +11,7 @@ import type {
   PipelinePreview,
   Repository,
   RepositoryInspection,
+  RepositoryRelease,
   RepositorySigningStatus,
   RepositoryWorkflowsResponse,
   WorkflowArtifactsResponse,
@@ -188,6 +191,22 @@ export const api = {
     workflowRunArtifacts: (owner: string, repo: string, runId: number) =>
       request<WorkflowArtifactsResponse>(
         runUrl(owner, repo, runId, "/artifacts"),
+      ),
+
+    releases: (owner: string, repo: string) =>
+      request<RepositoryRelease[]>(
+        repositoryUrl(owner, repo, "/releases"),
+      ),
+
+    createRelease: (
+      owner: string,
+      repo: string,
+      release: CreateReleaseRequest,
+    ) =>
+      jsonRequest<CreateReleaseResult>(
+        repositoryUrl(owner, repo, "/releases"),
+        "POST",
+        release,
       ),
 
     pipelines: (owner: string, repo: string) =>

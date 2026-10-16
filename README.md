@@ -89,6 +89,7 @@ Uzun vadede sistemin SaaS veya çok kullanıcılı bir ürüne dönüştürüleb
 - [Node.js Workflow Generator](#nodejs-workflow-generator)
 - [Python Workflow Generator](#python-workflow-generator)
 - [Mobile Signing](#mobile-signing)
+- [GitHub Releases](#github-releases)
 - [Android Pipeline](#android-pipeline)
 - [iOS Pipeline](#ios-pipeline)
 - [Workflow'un GitHub'a Yazılması](#workflowun-githuba-yazılması)
@@ -284,7 +285,7 @@ dönüşümü yapılabilir.
 
 # Mevcut Özellikler
 
-Uygulama şu anda Flutter, Node.js ve Python repository'leri için uçtan uca pipeline oluşturma, mevcut pipeline'ları yönetme ve GitHub Actions çalışmalarını izleme akışını desteklemektedir. Flutter repository'lerinde Android ve iOS signing credential'ları ayrıca GitHub Actions repository secrets olarak yönetilebilir:
+Uygulama şu anda Flutter, Node.js ve Python repository'leri için uçtan uca pipeline oluşturma, mevcut pipeline'ları yönetme, GitHub Actions çalışmalarını izleme ve başarılı build'lerden GitHub Release oluşturma akışını desteklemektedir. Flutter repository'lerinde Android ve iOS signing credential'ları ayrıca GitHub Actions repository secrets olarak yönetilebilir:
 
 ```text
 GitHub bağlantısı
@@ -390,6 +391,17 @@ Flutter mobile signing için:
 - `.p12` distribution certificate ve `.mobileprovision` yönetimi
 - temporary macOS keychain üzerinden `ios-ipa-signed` artifact'i
 - secret-bearing job'ların pull request event'lerinde çalıştırılmaması
+
+GitHub Releases için:
+
+- Mevcut draft, prerelease ve published release'leri listeleme
+- Default branch veya başarılı workflow run'ını release source seçme
+- Exact `run.headSha` provenance'ı
+- Manual veya GitHub-generated release notes
+- Draft ve prerelease seçenekleri
+- Seçilen Actions artifact'larını ZIP release asset olarak ekleme
+- Asset'li published release'lerde draft-first güvenli yayınlama
+- Partial upload/publish sonucunda draft'ı koruma ve GitHub bağlantısını gösterme
 
 ### Trigger
 
@@ -631,6 +643,12 @@ apps/web/src/
 │   ├── project-analysis/
 │   │   └── ProjectAnalysisPanel.tsx
 │   │
+│   ├── releases/
+│   │   ├── ReleaseArtifactSelector.tsx
+│   │   ├── ReleaseBuilder.tsx
+│   │   ├── ReleaseList.tsx
+│   │   └── ReleaseSourcePicker.tsx
+│   │
 │   ├── signing/
 │   │   ├── AndroidSigningCredentials.tsx
 │   │   ├── IosSigningCredentials.tsx
@@ -657,11 +675,13 @@ apps/web/src/
 ├── pages/
 │   ├── PipelinesPage.tsx
 │   ├── ProjectsPage.tsx
+│   ├── ReleasesPage.tsx
 │   ├── RunDetailPage.tsx
 │   └── RunsPage.tsx
 │
 ├── lib/
-│   └── api.ts
+│   ├── api.ts
+│   └── query-keys.ts
 │
 ├── App.tsx
 ├── main.tsx
@@ -681,7 +701,8 @@ apps/api/src/
 │
 ├── adapters/
 │   └── github/
-│       └── github-adapter.ts
+│       ├── github-adapter.ts
+│       └── release-mappers.ts
 │
 ├── config/
 │   └── env.ts
@@ -693,6 +714,7 @@ apps/api/src/
 │   ├── artifacts.ts
 │   ├── github.ts
 │   ├── pipelines.ts
+│   ├── releases.ts
 │   ├── runs.ts
 │   ├── signing.ts
 │   └── validation.ts
@@ -723,6 +745,9 @@ apps/api/src/
 │   ├── runs/
 │   │   └── runs-service.ts
 │   │
+│   ├── releases/
+│   │   └── release-service.ts
+│   │
 │   ├── signing/
 │   │   ├── secret-encryption.ts
 │   │   ├── signing-readiness.ts
@@ -749,6 +774,7 @@ packages/core/
 │   ├── github.ts
 │   ├── project.ts
 │   ├── pipeline.ts
+│   ├── releases.ts
 │   ├── signing.ts
 │   ├── runs.ts
 │   ├── artifacts.ts
@@ -822,8 +848,11 @@ App
  │       └── PythonPipelineBuilder
  ├── RunsPage
  │   └── RunDetailPage
- └── PipelinesPage
-     └── PipelineDetailsPanel
+ ├── PipelinesPage
+ │   └── PipelineDetailsPanel
+ └── ReleasesPage
+     ├── ReleaseList
+     └── ReleaseBuilder
 ```
 
 ---
@@ -834,7 +863,7 @@ Artık yalnızca application entry component seviyesindedir.
 
 Mantıksal olarak:
 
-`App.tsx`, React Router üzerinden `/projects`, `/runs` ve `/pipelines` sayfalarını eşler; feature veya GitHub business logic'i içermez.
+`App.tsx`, React Router üzerinden `/projects`, `/runs`, `/pipelines` ve `/releases` sayfalarını eşler; feature veya GitHub business logic'i içermez.
 
 Application-specific büyük logic burada tutulmaz.
 
@@ -1579,6 +1608,20 @@ GitHub Actions 48 KB secret limit
 
 Credential request modelleri yalnız browser → local API sınırında kullanılır. Secret value içermeyen `RepositorySigningStatus` ise API → web yönünde kullanılır. Flutter pipeline config yalnız non-secret signing tercihlerini taşır.
 
+## Release Models
+
+```text
+RepositoryRelease
+ReleaseAsset
+ReleaseSource
+ReleaseNotes
+CreateReleaseRequest
+CreateReleaseResult
+RELEASE_ARTIFACT_MAX_BYTES
+```
+
+Release request'i Zod discriminated union'larıyla default branch ve workflow run kaynaklarını, manual ve GitHub-generated notes modlarını birbirinden ayırır. Workflow run source dışında artifact ID kabul edilmez. Result union'ı published, draft ve partial sonuçlarını frontend'in açıkça ayırt etmesini sağlar.
+
 ---
 
 # Zod Kullanımı
@@ -2273,6 +2316,63 @@ GitHub Contents API güncelleme yaparken mevcut file SHA değerini gerektirdiği
 
 ---
 
+# GitHub Releases
+
+Releases ekranı `/releases` ve `/releases/:owner/:repo` route'larında mevcut `RepositorySelect` altyapısını kullanır. GitHub UI veya CLI gibi Homemade dışındaki araçlarla oluşturulmuş release'ler dahil repository'nin GitHub-native release listesi aynı sırayla gösterilir.
+
+Release builder şu iki kaynağı destekler:
+
+```text
+Default branch
+Successful workflow run
+```
+
+Workflow run kaynağında yalnız `status=completed` ve `conclusion=success` çalışmalar seçilebilir. Backend run durumunu GitHub'dan tekrar doğrular ve release target'ını client tarafından gönderilen bir SHA yerine gerçek `run.headSha` değeri olarak belirler:
+
+```text
+Built commit === Released commit
+```
+
+Mevcut tag lightweight veya annotated olsa da final commit'e kadar güvenli biçimde çözülür. Tag başka bir commit'e işaret ediyorsa release `409 Conflict` ile reddedilir; mevcut tag taşınmaz, silinmez veya force-update edilmez. Aynı tag için release zaten varsa duplicate creation yine `409 Conflict` olur.
+
+Release notes iki deterministik moda sahiptir:
+
+```text
+Manual Markdown body
+GitHub-generated release notes
+```
+
+Generated modda boş manual body gönderilip GitHub'ın ürettiği notlar override edilmez. Draft ve prerelease seçenekleri birbirinden bağımsızdır.
+
+Workflow run seçildiğinde o run'a ait, expire olmamış Actions artifact'ları açıkça seçilebilir. Backend artifact ID sahipliğini GitHub metadata'sından yeniden doğrular. Seçilen archive extract edilmez; doğrudan sanitize edilmiş bir ZIP release asset adına dönüştürülür:
+
+```text
+android-apk-signed.zip
+android-aab-signed.zip
+ios-ipa-signed.zip
+python-dist.zip
+```
+
+Artifact archive'ı download'dan release asset upload'a `ReadableStream` üzerinden aktarılır. **100 MiB** sınırı önce GitHub artifact metadata'sında, ardından signed download response `Content-Length` değerinde ve son olarak stream tüketilirken çalışma zamanı byte sayacıyla uygulanır. Böylece arbitrary büyüklükte `Buffer` oluşturulmaz; ZIP extraction, path traversal, symlink ve zip-bomb attack surface'i eklenmez.
+
+Asset içeren published release isteklerinde draft-first akış kullanılır:
+
+```text
+Create draft
+    ↓
+Upload selected ZIP assets
+    ↓
+All uploads successful?
+  ├─ yes → publish
+  └─ no  → keep draft + partial result
+```
+
+Kullanıcı draft isterse upload sonrasında draft korunur. Asset upload veya final publish adımı kısmen başarısız olursa release/tag otomatik silinmez; API `partial` sonucu, yüklenen asset'leri, güvenli hata metadata'sını ve GitHub draft bağlantısını döndürür.
+
+Release orchestration local backend PAT'i üzerinden çalışır. Generated GitHub Actions workflow'larının minimum `contents: read` permission'ı M8 nedeniyle genişletilmez.
+
+---
+
 # API Endpoint'leri
 
 Backend development adresi:
@@ -2582,6 +2682,19 @@ GET /api/github/repos/:owner/:repo/artifacts/:artifactId/download
 ```
 
 Pipeline detay endpoint'i Homemade marker'lı Flutter, Node.js ve Python workflow'larını kendi config türlerine parse eder. Enable/disable GitHub Actions workflow state'ini değiştirir; delete yalnızca Homemade tarafından yönetilen sabit workflow path'i için kullanılabilir.
+
+---
+
+# GitHub Release Yönetimi
+
+```http
+GET  /api/github/repos/:owner/:repo/releases
+POST /api/github/repos/:owner/:repo/releases
+```
+
+GET güvenli `RepositoryRelease[]` metadata'sını döndürür. POST; tag/name, notes mode, draft/prerelease ve release source içeren shared `CreateReleaseRequest` body kabul eder. Workflow-run source seçildiyse `runId` ve seçilen `artifactIds` gönderilir; commit SHA, artifact URL veya release upload URL client'tan kabul edilmez.
+
+Create sonucu `published`, `draft` veya `partial` outcome'larından biridir. Partial sonuç başarılı bir HTTP JSON response olarak döner; böylece frontend GitHub'da korunan draft release'i ve başarısız artifact/publish bilgisini gösterebilir.
 
 ---
 
@@ -3066,7 +3179,23 @@ Frontend hiçbir noktada Personal Access Token'ı görmez.
 
 Token'ın yalnızca Homemade CI/CD'nin ihtiyaç duyduğu repository ve izinlerle sınırlandırılması önerilir.
 
-Workflow yazılması gerektiği için repository content/workflow erişimi gerekir. Mobile signing credential status ve mutation endpoint'leri için repository `Secrets: Read and write` izni ayrıca zorunludur.
+Milestone 8 release akışının fine-grained repository izinleri şunlardır:
+
+```text
+Contents: Read and write  → release create/update ve release asset upload
+Actions: Read             → workflow run ve Actions artifact metadata/download
+```
+
+Release listing için read erişimi yeterli olsa da create/publish/asset akışı `Contents: Read and write` ister. Homemade CI/CD'nin daha önce tamamlanan workflow, run ve signing özellikleri de kullanılıyorsa toplam izin seti şunları korur:
+
+```text
+Workflows: Read and write → .github/workflows create/update
+Actions: Read and write   → run/artifact read ve dispatch/re-run/cancel/enable/disable
+Metadata: Read            → repository metadata
+Secrets: Read and write   → M7 mobile signing credential status/mutation
+```
+
+M8 mevcut izinleri daraltmaz; özellikle M7 `Secrets` izni yalnız signing capability'si için gereklidir.
 
 Token:
 
@@ -3085,6 +3214,15 @@ Token:
 - Generated YAML yalnız canonical `${{ secrets.* }}` referanslarını içerir.
 - Signed jobs pull request event'inde çalışmaz ve `pull_request_target` kullanılmaz.
 - Temporary keystore, `key.properties`, `.p12`, provisioning profile ve keychain always-run cleanup adımlarında silinir.
+
+## Release Security
+
+- Workflow run durumu, exact `headSha` ve artifact ownership/expiration backend tarafından GitHub'dan yeniden doğrulanır.
+- Frontend commit SHA, artifact download URL veya release upload URL göndermez.
+- Existing tag hiçbir koşulda move edilmez; mismatched tag ve duplicate release `409` ile reddedilir.
+- Actions archive'ı extract edilmez; 100 MiB sınırı metadata, download `Content-Length` ve stream byte sayacı katmanlarında uygulanır.
+- Asset'li public release draft-first oluşturulur; incomplete upload public bir release bırakmaz.
+- Partial failure'da draft/tag destructive rollback yapılmadan korunur.
 
 ---
 
@@ -3535,6 +3673,10 @@ Python workflow         ✓
 Python round-trip       ✓
 Managed round-trip      ✓
 Route validation        ✓
+Release provenance      ✓
+Tag safety              ✓
+Draft-first publish     ✓
+Partial release result  ✓
 ```
 
 ---
@@ -3613,6 +3755,8 @@ Node.js tarafında tüm package manager kurulumları, frozen/non-frozen davranı
 
 Mobile signing testleri Android Groovy/Kotlin DSL readiness sinyallerini, iOS Team/Bundle detection'ını, complete/partial secret status'u, save/delete ve permission error'larını adapter fake'leri üzerinden doğrular. Generator testleri secret reference, temporary material, signature verification, artifact adları, cleanup ve pull request job condition'larını kapsar. Signing marker parser testleri Android signed, iOS signed, her ikisi signed ve legacy unsigned config round-trip'larını kontrol eder. Testlerde gerçek keystore, certificate, provisioning profile veya GitHub mutation kullanılmaz.
 
+Release testleri shared request union'larını; lightweight/annotated tag resolution ve loop guard'ını; successful-run/exact-SHA provenance'ını; duplicate ve mismatched tag conflict'lerini; wrong-run, expired ve oversized artifact rejection'ını; asset adı sanitization/collision davranışını; draft-first publish ve partial failure sonuçlarını adapter/service/route fake'leri üzerinden doğrular. Automated testler gerçek tag, release, asset upload, GitHub token veya internet kullanmaz.
+
 ---
 
 # Bilinen Sınırlamalar
@@ -3639,6 +3783,11 @@ Henüz desteklenmeyen başlıca özellikler:
 - 48 KB'ı aşan encoded keystore/certificate/profile için large-secret workaround
 - custom Gradle/Xcode signing source'unu otomatik patch etme
 - Android/iOS signing readiness için repository'ye özel custom build logic'i yorumlama
+- GitHub Release edit/delete ve tag delete
+- Actions ZIP içinden doğrudan APK/AAB/IPA extraction
+- 100 MiB'ı aşan Actions artifact'larını release asset olarak transfer etme
+- release asset checksum üretimi
+- automatic semantic version bump veya changelog engine
 
 ### GitHub Actions Monitoring
 
@@ -3672,8 +3821,8 @@ Güncel milestone durumu:
 | M5 | Node.js Pipelines | DONE |
 | M6 | Python Pipelines | DONE |
 | M7 | Mobile Signing | DONE |
-| M8 | Releases | NEXT |
-| M9 | Store Deployment | PLANNED |
+| M8 | Releases | DONE |
+| M9 | Store Deployment | NEXT |
 
 ## Milestone 0 — Bootstrap
 
@@ -3908,19 +4057,23 @@ Durum: `DONE`
 
 # Milestone 8 — Releases
 
-Homemade CI/CD panelinden:
+Tamamlanan kapsam:
 
 ```text
-Version
-Release Notes
-Artifacts
-
-[ Release ]
+GitHub-native release listing
+Explicit version/tag ve release name
+Manual/GitHub-generated release notes
+Draft ve prerelease
+Default branch veya successful run source
+Exact run.headSha provenance
+Actions artifact seçimi
+Bounded ZIP asset transfer
+Existing/annotated tag safety
+Draft-first safe publish
+Visible partial failure result
 ```
 
-ile GitHub Release oluşturma.
-
-Durum: `NEXT`
+Durum: `DONE`
 
 ---
 
@@ -3941,6 +4094,8 @@ App Store
 ```
 
 deployment desteği.
+
+Durum: `NEXT`
 
 ---
 
@@ -4164,7 +4319,7 @@ detaylarını kendisi yönetir.
 
 # Current Status
 
-Proje Flutter, Node.js ve Python için gerçek end-to-end CI/CD akışlarını tamamlamıştır. Flutter tarafında Android signed APK/AAB ve iOS signed IPA üretimi, GitHub Actions repository secrets yönetimi ve signing readiness kontrolleri desteklenir. Milestone 0–7 kapsamı çalışır durumdadır; sıradaki hedef Milestone 8 Releases'tir.
+Proje Flutter, Node.js ve Python için gerçek end-to-end CI/CD akışlarını tamamlamıştır. Flutter tarafında Android signed APK/AAB ve iOS signed IPA üretimi, GitHub Actions repository secrets yönetimi ve signing readiness kontrolleri desteklenir. Başarılı workflow run'ları exact build commit'i ve seçilen Actions artifact'larıyla GitHub Releases'a dönüştürülebilir. Milestone 0–8 kapsamı çalışır durumdadır; sıradaki hedef Milestone 9 Store Deployment'tır.
 
 Çalışan akış:
 
@@ -4190,6 +4345,12 @@ GitHub Contents API
 .github/workflows/homemade-ci.yml
         ↓
 GitHub Actions
+        ↓
+Successful Workflow Run
+        ↓
+Release Builder
+        ↓
+GitHub Release + ZIP Assets
 ```
 
 Flutter, Node.js ve Python config'leri ortak managed dispatcher üzerinden doğrulanır, uygun YAML generator'a gönderilir ve repository içerisinde:
@@ -4200,7 +4361,7 @@ Flutter, Node.js ve Python config'leri ortak managed dispatcher üzerinden doğr
 
 dosyası otomatik olarak oluşturulur veya güncellenir.
 
-Panel ayrıca GitHub Actions run ve job durumlarını izler; workflow dispatch, re-run, failed-job re-run ve cancel komutlarını çalıştırır; Flutter ve Python build artifact'lerini aynı generic UI üzerinden listeler ve indirir. Pipelines ekranı repository workflow'larını listeler, Homemade tarafından yönetilen üç pipeline türünün YAML'ını tekrar config'e parse eder ve enable/disable/delete işlemlerini sunar.
+Panel ayrıca GitHub Actions run ve job durumlarını izler; workflow dispatch, re-run, failed-job re-run ve cancel komutlarını çalıştırır; Flutter ve Python build artifact'lerini aynı generic UI üzerinden listeler ve indirir. Pipelines ekranı repository workflow'larını listeler, Homemade tarafından yönetilen üç pipeline türünün YAML'ını tekrar config'e parse eder ve enable/disable/delete işlemlerini sunar. Releases ekranı mevcut GitHub release'lerini listeler; başarılı run provenance'ını doğrular; seçilen artifact archive'larını güvenli draft-first akışla ZIP release asset'lerine dönüştürür.
 
 Bu noktadan itibaren Homemade CI/CD yalnızca bir UI prototipi değildir.
 
